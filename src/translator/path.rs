@@ -64,16 +64,9 @@ impl fmt::Display for PathError {
 impl std::error::Error for PathError {}
 
 /// Common drive letter to Unix path mappings
-fn get_drive_mapping(drive: char) -> &'static str {
-    match drive.to_ascii_uppercase() {
-        'C' => "/mnt/c",
-        'D' => "/mnt/d",
-        'E' => "/mnt/e",
-        'F' => "/mnt/f",
-        'G' => "/mnt/g",
-        'H' => "/mnt/h",
-        _ => "/mnt/c", // Default fallback
-    }
+fn get_drive_mapping(drive: char) -> String {
+    // Use lowercase for the mount point (WSL convention)
+    format!("/mnt/{}", drive.to_ascii_lowercase())
 }
 
 /// Check if a path looks like a Windows path
@@ -122,9 +115,17 @@ fn windows_to_unix(path: &str, result: &mut PathTranslation) -> String {
     // Convert backslashes to forward slashes
     unix_path = unix_path.replace('\\', "/");
     
-    // Normalize multiple slashes
-    while unix_path.contains("//") && !unix_path.starts_with("//") {
-        unix_path = unix_path.replace("//", "/");
+    // Normalize multiple slashes (except leading // for network paths)
+    if unix_path.starts_with("//") {
+        let rest = unix_path[2..].split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("/");
+        unix_path = format!("//{}", rest);
+    } else {
+        let parts: Vec<_> = unix_path.split('/').filter(|s| !s.is_empty()).collect();
+        unix_path = if path.starts_with('/') || path.starts_with('\\') || path.chars().nth(1) == Some(':') {
+            format!("/{}", parts.join("/"))
+        } else {
+            parts.join("/")
+        };
     }
     
     unix_path
@@ -180,12 +181,11 @@ fn unix_to_windows(path: &str, result: &mut PathTranslation) -> String {
     
     // Normalize multiple backslashes (but keep UNC prefix)
     if windows_path.starts_with("\\\\") {
-        let rest = &windows_path[2..].replace("\\\\", "\\");
-        windows_path = format!("\\\\{}", rest);
+        let rest: Vec<_> = windows_path[2..].split('\\').filter(|s| !s.is_empty()).collect();
+        windows_path = format!("\\\\{}", rest.join("\\"));
     } else {
-        while windows_path.contains("\\\\") {
-            windows_path = windows_path.replace("\\\\", "\\");
-        }
+        let parts: Vec<_> = windows_path.split('\\').filter(|s| !s.is_empty()).collect();
+        windows_path = parts.join("\\");
     }
     
     windows_path
