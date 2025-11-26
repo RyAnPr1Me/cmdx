@@ -1,1 +1,178 @@
 # cmdx
+
+A high-performance cross-platform command and path translator library for Rust. Designed for integration into terminal emulators and cross-platform tools.
+
+## Features
+
+- **Command Translation**: Translate shell commands between Windows, Linux, macOS, BSD, and more
+- **Flag Translation**: Automatically translates command flags/options (e.g., `dir /w` → `ls -C`)
+- **Path Translation**: Bidirectional file path translation (e.g., `C:\Users` ↔ `/mnt/c/Users`)
+- **OS Detection**: Runtime detection of the current operating system
+- **High Performance**: Static lookup tables with lazy initialization
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+cmdx = "0.1"
+```
+
+## Usage
+
+### Command Translation
+
+```rust
+use cmdx::{translate_command, Os};
+
+// Translate Windows command to Linux
+let result = translate_command("dir /w /s", Os::Windows, Os::Linux)?;
+println!("{}", result.command);  // "ls -C -R"
+
+// Translate Linux command to Windows
+let result = translate_command("grep -i pattern", Os::Linux, Os::Windows)?;
+println!("{}", result.command);  // "findstr /i pattern"
+
+// Check for translation warnings
+for warning in &result.warnings {
+    println!("Warning: {}", warning);
+}
+```
+
+### Path Translation
+
+```rust
+use cmdx::{translate_path, Os};
+
+// Windows to Linux
+let result = translate_path("C:\\Users\\john\\file.txt", Os::Windows, Os::Linux)?;
+println!("{}", result.path);  // "/mnt/c/Users/john/file.txt"
+
+// Linux to Windows
+let result = translate_path("/mnt/c/Users/john", Os::Linux, Os::Windows)?;
+println!("{}", result.path);  // "C:\Users\john"
+
+// Home directory translation
+let result = translate_path("~/Documents", Os::Linux, Os::Windows)?;
+println!("{}", result.path);  // "%USERPROFILE%\Documents"
+```
+
+### Auto-Detect Path Format
+
+```rust
+use cmdx::{translate_path_auto, is_windows_path, is_unix_path, Os};
+
+// Auto-detect and translate
+let result = translate_path_auto("C:\\Users\\john", Os::Linux)?;
+println!("{}", result.path);  // "/mnt/c/Users/john"
+
+// Check path format
+assert!(is_windows_path("C:\\Users"));
+assert!(is_unix_path("/home/user"));
+```
+
+### OS Detection
+
+```rust
+use cmdx::detect_os;
+
+let os = detect_os();
+println!("Running on: {}", os);
+println!("Unix-like: {}", os.is_unix_like());
+println!("BSD-based: {}", os.is_bsd());
+```
+
+### Batch Translation
+
+```rust
+use cmdx::{translate_batch, translate_paths, Os};
+
+// Batch command translation
+let commands = vec!["dir", "cls", "copy"];
+let results = translate_batch(&commands, Os::Windows, Os::Linux);
+
+// Batch path translation
+let paths = vec!["C:\\Users", "D:\\Documents"];
+let results = translate_paths(&paths, Os::Windows, Os::Linux);
+```
+
+### Terminal Emulator Integration
+
+```rust
+use cmdx::{translate_command, translate_path, detect_os, Os};
+
+/// Process user input and translate for target OS
+fn process_input(input: &str, target_os: Os) -> String {
+    let current_os = detect_os();
+    
+    // Try command translation first
+    if let Ok(result) = translate_command(input, current_os, target_os) {
+        return result.command;
+    }
+    
+    // Fall back to path translation if it looks like a path
+    if let Ok(result) = translate_path(input, current_os, target_os) {
+        return result.path;
+    }
+    
+    // Return original if no translation needed
+    input.to_string()
+}
+```
+
+## Supported Commands
+
+### Windows → Linux
+
+| Windows | Linux | Notes |
+|---------|-------|-------|
+| `dir` | `ls` | Flags: `/w`→`-C`, `/s`→`-R`, `/a`→`-la` |
+| `copy` | `cp` | Flags: `/y`→`-f`, `/v`→`-v` |
+| `move` | `mv` | Flags: `/y`→`-f` |
+| `del` | `rm` | Flags: `/s`→`-r`, `/q`→`-f` |
+| `cls` | `clear` | |
+| `type` | `cat` | |
+| `findstr` | `grep` | Flags: `/i`→`-i`, `/n`→`-n` |
+| `tasklist` | `ps aux` | |
+| `ipconfig` | `ip addr` | |
+| `ping -n` | `ping -c` | Count flag translation |
+| And 30+ more... | | |
+
+### Linux → Windows
+
+| Linux | Windows | Notes |
+|-------|---------|-------|
+| `ls` | `dir` | Flags: `-la`→`/a`, `-R`→`/s` |
+| `cp` | `copy` | Flags: `-r`→`xcopy /s /e` |
+| `mv` | `move` | |
+| `rm` | `del` | Flags: `-r`→`/s`, `-f`→`/q` |
+| `clear` | `cls` | |
+| `cat` | `type` | |
+| `grep` | `findstr` | |
+| `ps` | `tasklist` | |
+| And 30+ more... | | |
+
+## Path Translation Mappings
+
+| Unix Path | Windows Path |
+|-----------|--------------|
+| `/mnt/c/...` | `C:\...` |
+| `/mnt/d/...` | `D:\...` |
+| `/home/user` | `C:\Users\user` |
+| `~` | `%USERPROFILE%` |
+| `//server/share` | `\\server\share` |
+
+## Supported Operating Systems
+
+- Windows
+- Linux
+- macOS (Darwin)
+- FreeBSD, OpenBSD, NetBSD
+- Solaris
+- Android
+- iOS
+
+## License
+
+MIT License
