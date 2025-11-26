@@ -15,12 +15,15 @@
 //! ```
 //! use cmdx::{translate_command, Os};
 //!
-//! let result = translate_command("ls -la", Os::Windows, Os::Linux);
-//! assert!(result.is_err()); // ls is not a Windows command
-//!
+//! // Translate a Windows command to Linux
 //! let result = translate_command("dir /w", Os::Windows, Os::Linux);
 //! assert!(result.is_ok());
 //! assert!(result.unwrap().command.contains("ls"));
+//!
+//! // Translate a Linux command to Windows
+//! let result = translate_command("ls -la", Os::Linux, Os::Windows);
+//! assert!(result.is_ok());
+//! assert!(result.unwrap().command.contains("dir"));
 //! ```
 
 pub mod translator;
