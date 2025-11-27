@@ -5,6 +5,7 @@ A high-performance cross-platform command and path translator library for Rust. 
 ## Features
 
 - **Command Translation**: Translate shell commands between Windows, Linux, macOS, BSD, and more
+- **Full Translation**: Translate commands AND their file path arguments in one call
 - **Smart Passthrough**: Commands already in the target OS format are passed through unchanged
 - **Flag Translation**: Automatically translates command flags/options (e.g., `dir /w` → `ls -C`)
 - **Compound Commands**: Translate multi-command pipelines with `&&`, `||`, `|`, and `;`
@@ -25,6 +26,26 @@ cmdx = "0.1"
 ```
 
 ## Usage
+
+### Full Command + Path Translation
+
+The `translate_full` function translates both commands AND file paths in arguments:
+
+```rust
+use cmdx::{translate_full, Os};
+
+// Windows command with paths to Linux
+let result = translate_full("copy C:\\Users\\file.txt D:\\backup\\", Os::Windows, Os::Linux)?;
+println!("{}", result.command);  // "cp /mnt/c/Users/file.txt /mnt/d/backup/"
+
+// Linux command with paths to Windows
+let result = translate_full("cp /home/user/file.txt /tmp/backup", Os::Linux, Os::Windows)?;
+println!("{}", result.command);  // "copy C:\Users\user\file.txt C:\tmp\backup"
+
+// Flags are also translated
+let result = translate_full("copy /y C:\\src\\file.txt D:\\dest\\", Os::Windows, Os::Linux)?;
+// => "cp -f /mnt/c/src/file.txt /mnt/d/dest/"
+```
 
 ### Command Translation
 

@@ -5,6 +5,7 @@ use std::fmt;
 
 use super::command_map::{get_mapping, is_native_command, is_target_command_for_os, CommandMapping};
 use super::os::Os;
+use super::path::{translate_path, is_windows_path, is_unix_path};
 
 /// Result of a command translation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +90,64 @@ fn parse_command(input: &str) -> (String, Vec<String>) {
     let args: Vec<String> = parts[1..].iter().map(|s| s.to_string()).collect();
     
     (command, args)
+}
+
+/// Maximum length of a Windows-style flag (e.g., "/w", "/s", "/a:")
+/// Used to distinguish short flags from paths that start with "/"
+const MAX_WINDOWS_FLAG_LEN: usize = 4;
+
+/// Check if an argument looks like a file path
+fn is_path_argument(arg: &str, from_os: Os) -> bool {
+    // Skip if it starts with a Unix-style flag prefix
+    if arg.starts_with('-') {
+        return false;
+    }
+    
+    // Skip Windows-style short flags (e.g., /w, /s, /a:h) 
+    // These are typically 1-3 characters after the "/" 
+    if from_os == Os::Windows && arg.starts_with('/') && arg.len() <= MAX_WINDOWS_FLAG_LEN {
+        return false;
+    }
+    
+    // Check for Windows paths
+    if from_os == Os::Windows {
+        return is_windows_path(arg);
+    }
+    
+    // Check for Unix paths
+    if from_os.is_unix_like() {
+        return is_unix_path(arg);
+    }
+    
+    false
+}
+
+/// Translate path arguments in a list of arguments
+fn translate_path_args(
+    args: &[String], 
+    from_os: Os, 
+    to_os: Os, 
+    result: &mut TranslationResult
+) -> Vec<String> {
+    args.iter().map(|arg| {
+        if is_path_argument(arg, from_os) {
+            match translate_path(arg, from_os, to_os) {
+                Ok(path_result) => {
+                    if !path_result.warnings.is_empty() {
+                        result.warnings.extend(path_result.warnings);
+                    }
+                    path_result.path
+                }
+                Err(e) => {
+                    // Log path translation error as a warning for debugging
+                    result.warnings.push(format!("Path '{}' could not be translated: {}", arg, e));
+                    arg.clone() // Keep original if translation fails
+                }
+            }
+        } else {
+            arg.clone()
+        }
+    }).collect()
 }
 
 /// Translate flags from source to target OS
@@ -347,6 +406,176 @@ pub fn translate_batch(
         .iter()
         .map(|cmd| translate_command(cmd, from_os, to_os))
         .collect()
+}
+
+/// Translate a command with full path translation
+///
+/// This function translates both the command and any file paths in the arguments.
+/// It combines command translation with path translation for complete cross-platform conversion.
+///
+/// # Arguments
+///
+/// * `input` - The command string to translate (may include file paths)
+/// * `from_os` - The source operating system
+/// * `to_os` - The target operating system
+///
+/// # Returns
+///
+/// * `Ok(TranslationResult)` - The translated command with paths converted
+/// * `Err(TranslationError)` - Error if translation fails
+///
+/// # Example
+///
+/// ```
+/// use cmdx::{translate_full, Os};
+///
+/// // Windows command with path to Linux
+/// let result = translate_full("copy C:\\Users\\file.txt D:\\backup\\", Os::Windows, Os::Linux);
+/// assert!(result.is_ok());
+/// let r = result.unwrap();
+/// assert!(r.command.contains("cp"));
+/// assert!(r.command.contains("/mnt/c/"));
+///
+/// // Linux command with path to Windows  
+/// let result = translate_full("cp /home/user/file.txt /tmp/", Os::Linux, Os::Windows);
+/// assert!(result.is_ok());
+/// ```
+pub fn translate_full(
+    input: &str,
+    from_os: Os,
+    to_os: Os,
+) -> Result<TranslationResult, TranslationError> {
+    // Check for empty input
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(TranslationError::EmptyCommand);
+    }
+    
+    // Same OS - just return the input
+    if from_os == to_os {
+        return Ok(TranslationResult::new(
+            trimmed.to_string(),
+            trimmed.to_string(),
+            from_os,
+            to_os,
+        ));
+    }
+    
+    // Parse the command
+    let (command_name, args) = parse_command(trimmed);
+    
+    if command_name.is_empty() {
+        return Err(TranslationError::EmptyCommand);
+    }
+    
+    // First translate the paths in arguments
+    let mut result = TranslationResult::new(
+        String::new(),
+        trimmed.to_string(),
+        from_os,
+        to_os,
+    );
+    
+    let args_with_translated_paths = translate_path_args(&args, from_os, to_os, &mut result);
+    
+    // Check if the command is already native to the target OS
+    if is_native_command(&command_name, to_os) && !is_native_command(&command_name, from_os) {
+        // Command is already in target OS format, just use translated paths
+        let mut final_command = command_name.clone();
+        if !args_with_translated_paths.is_empty() {
+            final_command.push(' ');
+            final_command.push_str(&args_with_translated_paths.join(" "));
+        }
+        result.command = final_command;
+        result.warnings.push(format!(
+            "Command '{}' is already in {} format, only paths translated",
+            command_name, to_os
+        ));
+        return Ok(result);
+    }
+    
+    // Command exists on both OSes - translate flags and paths
+    if is_native_command(&command_name, to_os) && is_native_command(&command_name, from_os) {
+        if let Some(mapping) = get_mapping(&command_name, from_os, to_os) {
+            let translated_args = translate_flags(&args_with_translated_paths, mapping, &mut result);
+            
+            let mut final_command = mapping.target_cmd.clone();
+            if !translated_args.is_empty() {
+                final_command.push(' ');
+                final_command.push_str(&translated_args.join(" "));
+            }
+            
+            result.command = final_command;
+            return Ok(result);
+        } else {
+            // No flag mappings, use translated paths
+            let mut final_command = command_name.clone();
+            if !args_with_translated_paths.is_empty() {
+                final_command.push(' ');
+                final_command.push_str(&args_with_translated_paths.join(" "));
+            }
+            result.command = final_command;
+            return Ok(result);
+        }
+    }
+    
+    // Look up the command mapping
+    let mapping = match get_mapping(&command_name, from_os, to_os) {
+        Some(m) => m,
+        None => {
+            // Unix to Unix compatibility
+            if from_os.is_unix_like() && to_os.is_unix_like() {
+                let mut final_command = command_name.clone();
+                if !args_with_translated_paths.is_empty() {
+                    final_command.push(' ');
+                    final_command.push_str(&args_with_translated_paths.join(" "));
+                }
+                result.command = final_command;
+                result.warnings.push(format!(
+                    "Command '{}' passed through with path translation (Unix-like OS compatibility assumed)",
+                    command_name
+                ));
+                return Ok(result);
+            }
+            
+            // Check if command is already a target OS command
+            if is_target_command_for_os(&command_name, to_os) {
+                let mut final_command = command_name.clone();
+                if !args_with_translated_paths.is_empty() {
+                    final_command.push(' ');
+                    final_command.push_str(&args_with_translated_paths.join(" "));
+                }
+                result.command = final_command;
+                result.warnings.push(format!(
+                    "Command '{}' appears to already be a {} command, paths translated",
+                    command_name, to_os
+                ));
+                return Ok(result);
+            }
+            
+            return Err(TranslationError::CommandNotFound(command_name));
+        }
+    };
+    
+    // Translate both flags and paths
+    let translated_args = translate_flags(&args_with_translated_paths, mapping, &mut result);
+    
+    // Build the final command
+    let mut final_command = mapping.target_cmd.clone();
+    
+    if !translated_args.is_empty() {
+        final_command.push(' ');
+        final_command.push_str(&translated_args.join(" "));
+    }
+    
+    result.command = final_command;
+    
+    // Add notes from mapping if any
+    if let Some(notes) = &mapping.notes {
+        result.warnings.push(notes.clone());
+    }
+    
+    Ok(result)
 }
 
 /// Operators used in compound commands
@@ -938,5 +1167,70 @@ mod tests {
     fn test_translate_shebang_same_os() {
         let result = translate_shebang("#!/bin/bash", Os::Linux, Os::Linux);
         assert_eq!(result, "#!/bin/bash");
+    }
+
+    #[test]
+    fn test_translate_full_windows_to_linux_with_path() {
+        let result = translate_full("copy C:\\Users\\file.txt D:\\backup\\", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("cp"));
+        assert!(r.command.contains("/mnt/c/"));
+        assert!(r.command.contains("/mnt/d/"));
+    }
+
+    #[test]
+    fn test_translate_full_linux_to_windows_with_path() {
+        let result = translate_full("cp /mnt/c/Users/file.txt /tmp/backup", Os::Linux, Os::Windows);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("copy"));
+        assert!(r.command.contains("C:"));
+    }
+
+    #[test]
+    fn test_translate_full_dir_with_path() {
+        let result = translate_full("dir C:\\Windows", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("ls"));
+        assert!(r.command.contains("/mnt/c/"));
+    }
+
+    #[test]
+    fn test_translate_full_ls_with_path() {
+        let result = translate_full("ls /home/user/documents", Os::Linux, Os::Windows);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("dir"));
+        assert!(r.command.contains("Users"));
+    }
+
+    #[test]
+    fn test_translate_full_preserves_flags_and_paths() {
+        let result = translate_full("copy /y C:\\src\\file.txt D:\\dest\\", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("cp"));
+        assert!(r.command.contains("-f")); // /y -> -f
+        assert!(r.command.contains("/mnt/c/"));
+        assert!(r.command.contains("/mnt/d/"));
+    }
+
+    #[test]
+    fn test_is_path_argument() {
+        // Windows paths
+        assert!(is_path_argument("C:\\Users", Os::Windows));
+        assert!(is_path_argument("D:\\Documents\\file.txt", Os::Windows));
+        
+        // Unix paths
+        assert!(is_path_argument("/home/user", Os::Linux));
+        assert!(is_path_argument("~/Documents", Os::Linux));
+        assert!(is_path_argument("./local/file", Os::Linux));
+        
+        // Not paths (flags)
+        assert!(!is_path_argument("-la", Os::Linux));
+        assert!(!is_path_argument("/w", Os::Windows));
+        assert!(!is_path_argument("--help", Os::Linux));
     }
 }
