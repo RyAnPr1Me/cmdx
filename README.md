@@ -5,6 +5,7 @@ A high-performance cross-platform command and path translator library for Rust. 
 ## Features
 
 - **Command Translation**: Translate shell commands between Windows, Linux, macOS, BSD, and more
+- **Smart Passthrough**: Commands already in the target OS format are passed through unchanged
 - **Flag Translation**: Automatically translates command flags/options (e.g., `dir /w` → `ls -C`)
 - **Compound Commands**: Translate multi-command pipelines with `&&`, `||`, `|`, and `;`
 - **Path Translation**: Bidirectional file path translation (e.g., `C:\Users` ↔ `/mnt/c/Users`)
@@ -40,6 +41,24 @@ println!("{}", result.command);  // "findstr /i pattern"
 for warning in &result.warnings {
     println!("Warning: {}", warning);
 }
+```
+
+### Smart Passthrough
+
+Commands that are already in the target OS format are automatically detected and passed through unchanged:
+
+```rust
+use cmdx::{translate_command, is_native_command, Os};
+
+// If you're translating to Linux and the command is already a Linux command,
+// it passes through unchanged
+let result = translate_command("ls -la", Os::Windows, Os::Linux)?;
+println!("{}", result.command);  // "ls -la" (passed through, already Linux native)
+
+// Check if a command is native to an OS
+assert!(is_native_command("dir", Os::Windows));
+assert!(is_native_command("ls", Os::Linux));
+assert!(is_native_command("open", Os::MacOS));
 ```
 
 ### Compound Command Translation

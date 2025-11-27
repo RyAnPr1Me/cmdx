@@ -72,7 +72,7 @@
 pub mod translator;
 
 // Command translation exports
-pub use translator::command_map::{CommandMapping, FlagMapping};
+pub use translator::command_map::{CommandMapping, FlagMapping, is_native_command, is_target_command_for_os};
 pub use translator::engine::{translate_command, translate_command_str, translate_batch, translate_compound_command, TranslationResult, TranslationError};
 
 // Path translation exports

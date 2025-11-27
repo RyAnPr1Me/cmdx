@@ -23,21 +23,25 @@ use std::collections::HashMap;
 
 lazy_static! {
     /// Common environment variable name mappings between Windows and Unix
+    /// Note: Only exact equivalents are mapped. Variables without direct equivalents
+    /// are passed through unchanged to preserve semantics.
     static ref ENV_VAR_MAPPINGS: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
-        // Windows -> Unix mappings
+        // Windows -> Unix mappings (only exact equivalents)
         m.insert("USERPROFILE", "HOME");
         m.insert("USERNAME", "USER");
-        m.insert("HOMEDRIVE", "HOME");
-        m.insert("HOMEPATH", "HOME");
         m.insert("APPDATA", "XDG_CONFIG_HOME");
         m.insert("LOCALAPPDATA", "XDG_DATA_HOME");
         m.insert("TEMP", "TMPDIR");
         m.insert("TMP", "TMPDIR");
-        m.insert("SYSTEMROOT", "/");
-        m.insert("WINDIR", "/");
         m.insert("COMPUTERNAME", "HOSTNAME");
-        m.insert("NUMBER_OF_PROCESSORS", "NPROC");
+        m.insert("CD", "PWD");
+        m.insert("PATHEXT", ""); // No direct Unix equivalent
+        m.insert("COMSPEC", "SHELL");
+        m.insert("PROGRAMFILES", "/usr/local");
+        m.insert("PROGRAMFILES(X86)", "/usr/local");
+        m.insert("ALLUSERSPROFILE", "/etc");
+        m.insert("PUBLIC", "/tmp");
         m
     };
 
@@ -48,8 +52,13 @@ lazy_static! {
         m.insert("USER", "USERNAME");
         m.insert("XDG_CONFIG_HOME", "APPDATA");
         m.insert("XDG_DATA_HOME", "LOCALAPPDATA");
+        m.insert("XDG_CACHE_HOME", "LOCALAPPDATA");
         m.insert("TMPDIR", "TEMP");
         m.insert("HOSTNAME", "COMPUTERNAME");
+        m.insert("PWD", "CD");
+        m.insert("SHELL", "COMSPEC");
+        m.insert("LANG", ""); // No direct Windows equivalent
+        m.insert("LC_ALL", ""); // No direct Windows equivalent
         m
     };
 }
@@ -187,9 +196,11 @@ fn translate_unix_to_windows_env(input: &str) -> String {
     result
 }
 
-/// Translate a string containing both commands and environment variables
+/// Alias for translate_env_vars for convenience.
 ///
-/// This is a convenience function that combines command and environment variable translation.
+/// This function translates environment variable references in a string
+/// from one OS format to another.
+#[inline]
 pub fn translate_with_env(input: &str, from_os: Os, to_os: Os) -> String {
     translate_env_vars(input, from_os, to_os)
 }

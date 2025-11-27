@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use super::command_map::{get_mapping, CommandMapping};
+use super::command_map::{get_mapping, is_native_command, is_target_command_for_os, CommandMapping};
 use super::os::Os;
 
 /// Result of a command translation
@@ -204,6 +204,57 @@ pub fn translate_command(
         return Err(TranslationError::EmptyCommand);
     }
     
+    // Check if the command is already native to the target OS
+    // If so, pass it through without transformation
+    if is_native_command(&command_name, to_os) && !is_native_command(&command_name, from_os) {
+        // Command is already in target OS format, pass through
+        let mut result = TranslationResult::new(
+            trimmed.to_string(),
+            trimmed.to_string(),
+            from_os,
+            to_os,
+        );
+        result.warnings.push(format!(
+            "Command '{}' is already in {} format, passed through unchanged",
+            command_name, to_os
+        ));
+        return Ok(result);
+    }
+    
+    // Check if the command is native to the target OS (same command on both)
+    // For example, 'ping' exists on both Windows and Linux
+    if is_native_command(&command_name, to_os) && is_native_command(&command_name, from_os) {
+        // Command exists on both OSes - check if we have flag translations
+        if let Some(mapping) = get_mapping(&command_name, from_os, to_os) {
+            // We have flag mappings, so translate the flags
+            let mut result = TranslationResult::new(
+                String::new(),
+                trimmed.to_string(),
+                from_os,
+                to_os,
+            );
+            
+            let translated_args = translate_flags(&args, mapping, &mut result);
+            
+            let mut final_command = mapping.target_cmd.clone();
+            if !translated_args.is_empty() {
+                final_command.push(' ');
+                final_command.push_str(&translated_args.join(" "));
+            }
+            
+            result.command = final_command;
+            return Ok(result);
+        } else {
+            // No flag mappings, pass through unchanged
+            return Ok(TranslationResult::new(
+                trimmed.to_string(),
+                trimmed.to_string(),
+                from_os,
+                to_os,
+            ));
+        }
+    }
+    
     // Look up the mapping
     let mapping = match get_mapping(&command_name, from_os, to_os) {
         Some(m) => m,
@@ -223,6 +274,22 @@ pub fn translate_command(
                 ));
                 return Ok(result);
             }
+            
+            // Check if command is already a target OS command
+            if is_target_command_for_os(&command_name, to_os) {
+                let mut result = TranslationResult::new(
+                    trimmed.to_string(),
+                    trimmed.to_string(),
+                    from_os,
+                    to_os,
+                );
+                result.warnings.push(format!(
+                    "Command '{}' appears to already be a {} command, passed through unchanged",
+                    command_name, to_os
+                ));
+                return Ok(result);
+            }
+            
             return Err(TranslationError::CommandNotFound(command_name));
         }
     };
@@ -665,5 +732,56 @@ mod tests {
         assert_eq!(parts[2].trim(), "cls");
         assert_eq!(parts[3], "||");
         assert_eq!(parts[4].trim(), "type");
+    }
+
+    #[test]
+    fn test_native_command_passthrough() {
+        // If we're translating from Linux to Windows, but the command is already
+        // a Windows command (like 'dir'), it should pass through unchanged
+        let result = translate_command("dir", Os::Linux, Os::Windows);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.command, "dir");
+        assert!(result.warnings.iter().any(|w| w.contains("already")));
+    }
+
+    #[test]
+    fn test_native_command_passthrough_with_flags() {
+        // Windows command with Windows flags should pass through
+        let result = translate_command("dir /w", Os::Linux, Os::Windows);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.command, "dir /w");
+    }
+
+    #[test]
+    fn test_native_unix_command_passthrough_to_linux() {
+        // If we're translating from Windows to Linux, but the command is already
+        // a Linux command (like 'ls'), it should pass through unchanged
+        let result = translate_command("ls", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.command, "ls");
+        assert!(result.warnings.iter().any(|w| w.contains("already")));
+    }
+
+    #[test]
+    fn test_native_unix_command_passthrough_with_flags() {
+        // Unix command with Unix flags should pass through
+        let result = translate_command("ls -la", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.command, "ls -la");
+    }
+
+    #[test]
+    fn test_common_command_with_different_flags() {
+        // ping exists on both OSes but has different flag syntax
+        // When translating from Windows to Linux, flags should be translated
+        let result = translate_command("ping -n 5 localhost", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.command.contains("ping"));
+        assert!(result.command.contains("-c")); // -n becomes -c
     }
 }

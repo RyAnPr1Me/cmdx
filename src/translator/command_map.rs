@@ -99,44 +99,73 @@ lazy_static! {
         // Windows -> Linux/Unix mappings
         // ============================================================
         
-        // dir -> ls
+        // dir -> ls (comprehensive flag mapping)
         m.insert(
             MappingKey::new("dir", Os::Windows, Os::Linux),
+            CommandMapping::new("dir", "ls")
+                .with_flags(vec![
+                    FlagMapping::with_description("/w", "-C", "Wide list format"),
+                    FlagMapping::with_description("/d", "-C", "Wide list format (same as /w)"),
+                    FlagMapping::with_description("/s", "-R", "Recursive listing"),
+                    FlagMapping::with_description("/b", "-1", "Bare format (names only)"),
+                    FlagMapping::with_description("/a", "-la", "All files including hidden"),
+                    FlagMapping::with_description("/a:h", "-a", "Hidden files only"),
+                    FlagMapping::with_description("/a:d", "-d */", "Directories only"),
+                    FlagMapping::with_description("/a:r", "-l", "Read-only files"),
+                    FlagMapping::with_description("/a:-h", "", "Not hidden"),
+                    FlagMapping::with_description("/o", "", "Sorted"),
+                    FlagMapping::with_description("/o:n", "--sort=name", "Sort by name"),
+                    FlagMapping::with_description("/o:-n", "--sort=name -r", "Sort by name reversed"),
+                    FlagMapping::with_description("/o:s", "--sort=size", "Sort by size"),
+                    FlagMapping::with_description("/o:-s", "--sort=size -r", "Sort by size reversed"),
+                    FlagMapping::with_description("/o:d", "--sort=time", "Sort by date"),
+                    FlagMapping::with_description("/o:-d", "--sort=time -r", "Sort by date reversed"),
+                    FlagMapping::with_description("/o:e", "--sort=extension", "Sort by extension"),
+                    FlagMapping::with_description("/o:g", "", "Group directories first"),
+                    FlagMapping::with_description("/t:c", "--time=ctime", "Use creation time"),
+                    FlagMapping::with_description("/t:a", "--time=atime", "Use access time"),
+                    FlagMapping::with_description("/t:w", "", "Use write time (default)"),
+                    FlagMapping::with_description("/p", "", "Pause (not directly supported)"),
+                    FlagMapping::with_description("/q", "-l", "Show owner"),
+                    FlagMapping::with_description("/n", "-1", "New long list format"),
+                    FlagMapping::with_description("/x", "-lX", "Show short names"),
+                    FlagMapping::with_description("/4", "", "Four-digit years"),
+                    FlagMapping::with_description("/l", "-l", "Lowercase"),
+                    FlagMapping::with_description("/c", "--block-size=1", "Thousand separator"),
+                ]),
+        );
+        
+        // Also add macOS mapping (similar to Linux but some GNU options differ)
+        m.insert(
+            MappingKey::new("dir", Os::Windows, Os::MacOS),
             CommandMapping::new("dir", "ls")
                 .with_flags(vec![
                     FlagMapping::with_description("/w", "-C", "Wide list format"),
                     FlagMapping::with_description("/s", "-R", "Recursive listing"),
                     FlagMapping::with_description("/b", "-1", "Bare format (names only)"),
                     FlagMapping::with_description("/a", "-la", "All files including hidden"),
-                    FlagMapping::with_description("/o:n", "--sort=name", "Sort by name"),
-                    FlagMapping::with_description("/o:s", "--sort=size", "Sort by size"),
-                    FlagMapping::with_description("/o:d", "--sort=time", "Sort by date"),
-                    FlagMapping::with_description("/p", "", "Pause (not directly supported)"),
+                    FlagMapping::with_description("/a:h", "-a", "Hidden files"),
+                    FlagMapping::with_description("/o:n", "", "Sort by name (default)"),
+                    FlagMapping::with_description("/o:s", "-S", "Sort by size"),
+                    FlagMapping::with_description("/o:d", "-t", "Sort by time"),
                     FlagMapping::with_description("/q", "-l", "Show owner"),
                 ]),
         );
         
-        // Also add macOS mapping (similar to Linux)
-        m.insert(
-            MappingKey::new("dir", Os::Windows, Os::MacOS),
-            CommandMapping::new("dir", "ls")
-                .with_flags(vec![
-                    FlagMapping::new("/w", "-C"),
-                    FlagMapping::new("/s", "-R"),
-                    FlagMapping::new("/b", "-1"),
-                    FlagMapping::new("/a", "-la"),
-                ]),
-        );
-        
-        // copy -> cp
+        // copy -> cp (comprehensive flag mapping)
         m.insert(
             MappingKey::new("copy", Os::Windows, Os::Linux),
             CommandMapping::new("copy", "cp")
                 .with_flags(vec![
-                    FlagMapping::with_description("/y", "-f", "Force overwrite"),
+                    FlagMapping::with_description("/y", "-f", "Force overwrite without prompting"),
+                    FlagMapping::with_description("/-y", "-i", "Prompt before overwrite"),
                     FlagMapping::with_description("/v", "-v", "Verbose"),
-                    FlagMapping::with_description("/a", "", "ASCII mode (N/A)"),
-                    FlagMapping::with_description("/b", "", "Binary mode (default)"),
+                    FlagMapping::with_description("/z", "", "Network resilient mode (N/A)"),
+                    FlagMapping::with_description("/a", "", "ASCII mode (N/A in Unix)"),
+                    FlagMapping::with_description("/b", "", "Binary mode (default in Unix)"),
+                    FlagMapping::with_description("/d", "", "Allow decrypted destination"),
+                    FlagMapping::with_description("/n", "", "Use short filename"),
+                    FlagMapping::with_description("/l", "-s", "Create symbolic link"),
                 ]),
         );
         
@@ -144,30 +173,52 @@ lazy_static! {
             MappingKey::new("copy", Os::Windows, Os::MacOS),
             CommandMapping::new("copy", "cp")
                 .with_flags(vec![
-                    FlagMapping::new("/y", "-f"),
-                    FlagMapping::new("/v", "-v"),
+                    FlagMapping::with_description("/y", "-f", "Force overwrite"),
+                    FlagMapping::with_description("/-y", "-i", "Interactive"),
+                    FlagMapping::with_description("/v", "-v", "Verbose"),
                 ]),
         );
         
-        // xcopy -> cp -r
+        // xcopy -> cp -r (comprehensive flag mapping)
         m.insert(
             MappingKey::new("xcopy", Os::Windows, Os::Linux),
             CommandMapping::new("xcopy", "cp -r")
                 .with_flags(vec![
                     FlagMapping::with_description("/s", "", "Copy subdirs (implied by -r)"),
-                    FlagMapping::with_description("/e", "", "Copy empty dirs too"),
+                    FlagMapping::with_description("/e", "", "Copy empty dirs too (implied by -r)"),
                     FlagMapping::with_description("/y", "-f", "Force overwrite"),
+                    FlagMapping::with_description("/-y", "-i", "Prompt before overwrite"),
                     FlagMapping::with_description("/i", "", "Assume destination is directory"),
-                    FlagMapping::with_description("/q", "-q", "Quiet mode"),
+                    FlagMapping::with_description("/q", "", "Quiet mode"),
+                    FlagMapping::with_description("/f", "-v", "Display full source/dest names"),
+                    FlagMapping::with_description("/l", "-n", "List files (dry run)"),
+                    FlagMapping::with_description("/h", "", "Copy hidden and system files"),
+                    FlagMapping::with_description("/r", "", "Overwrite read-only files"),
+                    FlagMapping::with_description("/t", "", "Create directory structure only"),
+                    FlagMapping::with_description("/u", "-u", "Update only newer files"),
+                    FlagMapping::with_description("/k", "-p", "Keep attributes"),
+                    FlagMapping::with_description("/n", "", "Copy using short names"),
+                    FlagMapping::with_description("/o", "-p", "Copy ownership and ACL"),
+                    FlagMapping::with_description("/x", "-p", "Copy audit settings"),
+                    FlagMapping::with_description("/v", "", "Verify each file"),
+                    FlagMapping::with_description("/c", "", "Continue on errors"),
+                    FlagMapping::with_description("/g", "", "Copy encrypted files"),
+                    FlagMapping::with_description("/d", "", "Copy only files changed on date"),
+                    FlagMapping::with_description("/a", "", "Archive attribute files only"),
+                    FlagMapping::with_description("/m", "", "Archive files, reset archive attr"),
+                    FlagMapping::with_description("/z", "", "Network resilient mode"),
+                    FlagMapping::with_description("/b", "-a", "Copy symbolic link itself"),
+                    FlagMapping::with_description("/j", "", "Copy using unbuffered I/O"),
                 ]),
         );
         
-        // move -> mv
+        // move -> mv (comprehensive flag mapping)
         m.insert(
             MappingKey::new("move", Os::Windows, Os::Linux),
             CommandMapping::new("move", "mv")
                 .with_flags(vec![
-                    FlagMapping::with_description("/y", "-f", "Force overwrite"),
+                    FlagMapping::with_description("/y", "-f", "Force overwrite without prompting"),
+                    FlagMapping::with_description("/-y", "-i", "Prompt before overwrite"),
                 ]),
         );
         
@@ -175,19 +226,36 @@ lazy_static! {
             MappingKey::new("move", Os::Windows, Os::MacOS),
             CommandMapping::new("move", "mv")
                 .with_flags(vec![
-                    FlagMapping::new("/y", "-f"),
+                    FlagMapping::with_description("/y", "-f", "Force overwrite"),
+                    FlagMapping::with_description("/-y", "-i", "Interactive"),
                 ]),
         );
         
-        // del/erase -> rm
+        // del/erase -> rm (comprehensive flag mapping)
         m.insert(
             MappingKey::new("del", Os::Windows, Os::Linux),
             CommandMapping::new("del", "rm")
                 .with_flags(vec![
-                    FlagMapping::with_description("/s", "-r", "Recursive"),
-                    FlagMapping::with_description("/q", "-f", "Quiet/Force"),
-                    FlagMapping::with_description("/f", "-f", "Force"),
-                    FlagMapping::with_description("/p", "-i", "Prompt before delete"),
+                    FlagMapping::with_description("/s", "-r", "Recursive delete"),
+                    FlagMapping::with_description("/q", "-f", "Quiet mode (no confirmation)"),
+                    FlagMapping::with_description("/f", "-f", "Force delete read-only files"),
+                    FlagMapping::with_description("/p", "-i", "Prompt before each delete"),
+                    FlagMapping::with_description("/a", "", "Delete by attributes"),
+                    FlagMapping::with_description("/a:r", "", "Read-only files"),
+                    FlagMapping::with_description("/a:h", "", "Hidden files"),
+                    FlagMapping::with_description("/a:s", "", "System files"),
+                    FlagMapping::with_description("/a:a", "", "Archive files"),
+                ]),
+        );
+        
+        m.insert(
+            MappingKey::new("del", Os::Windows, Os::MacOS),
+            CommandMapping::new("del", "rm")
+                .with_flags(vec![
+                    FlagMapping::with_description("/s", "-r", "Recursive delete"),
+                    FlagMapping::with_description("/q", "-f", "Quiet mode"),
+                    FlagMapping::with_description("/f", "-f", "Force delete"),
+                    FlagMapping::with_description("/p", "-i", "Interactive"),
                 ]),
         );
         
@@ -195,20 +263,29 @@ lazy_static! {
             MappingKey::new("erase", Os::Windows, Os::Linux),
             CommandMapping::new("erase", "rm")
                 .with_flags(vec![
-                    FlagMapping::new("/s", "-r"),
-                    FlagMapping::new("/q", "-f"),
-                    FlagMapping::new("/f", "-f"),
-                    FlagMapping::new("/p", "-i"),
+                    FlagMapping::with_description("/s", "-r", "Recursive"),
+                    FlagMapping::with_description("/q", "-f", "Quiet"),
+                    FlagMapping::with_description("/f", "-f", "Force"),
+                    FlagMapping::with_description("/p", "-i", "Interactive"),
                 ]),
         );
         
-        // rmdir/rd -> rm -r or rmdir
+        // rmdir/rd -> rm -r (comprehensive flag mapping)
         m.insert(
             MappingKey::new("rmdir", Os::Windows, Os::Linux),
             CommandMapping::new("rmdir", "rm -r")
                 .with_flags(vec![
+                    FlagMapping::with_description("/s", "", "Recursive (implied by -r)"),
+                    FlagMapping::with_description("/q", "-f", "Quiet mode"),
+                ]),
+        );
+        
+        m.insert(
+            MappingKey::new("rmdir", Os::Windows, Os::MacOS),
+            CommandMapping::new("rmdir", "rm -r")
+                .with_flags(vec![
                     FlagMapping::with_description("/s", "", "Recursive (implied)"),
-                    FlagMapping::with_description("/q", "-f", "Quiet"),
+                    FlagMapping::with_description("/q", "-f", "Quiet mode"),
                 ]),
         );
         
@@ -216,17 +293,25 @@ lazy_static! {
             MappingKey::new("rd", Os::Windows, Os::Linux),
             CommandMapping::new("rd", "rm -r")
                 .with_flags(vec![
-                    FlagMapping::new("/s", ""),
-                    FlagMapping::new("/q", "-f"),
+                    FlagMapping::with_description("/s", "", "Recursive (implied)"),
+                    FlagMapping::with_description("/q", "-f", "Quiet"),
                 ]),
         );
         
-        // mkdir/md -> mkdir
+        // mkdir/md -> mkdir (comprehensive flag mapping)
         m.insert(
             MappingKey::new("mkdir", Os::Windows, Os::Linux),
             CommandMapping::new("mkdir", "mkdir")
                 .with_flags(vec![
-                    FlagMapping::with_description("/p", "-p", "Create parent directories"),
+                    FlagMapping::with_description("", "-p", "Create parent directories automatically"),
+                ]),
+        );
+        
+        m.insert(
+            MappingKey::new("mkdir", Os::Windows, Os::MacOS),
+            CommandMapping::new("mkdir", "mkdir")
+                .with_flags(vec![
+                    FlagMapping::with_description("", "-p", "Create parent directories"),
                 ]),
         );
         
@@ -449,28 +534,59 @@ lazy_static! {
         // chkdsk -> fsck
         m.insert(
             MappingKey::new("chkdsk", Os::Windows, Os::Linux),
-            CommandMapping::new("chkdsk", "fsck"),
+            CommandMapping::new("chkdsk", "fsck")
+                .with_flags(vec![
+                    FlagMapping::with_description("/f", "-y", "Fix errors automatically"),
+                    FlagMapping::with_description("/r", "-c", "Locate bad sectors"),
+                    FlagMapping::with_description("/x", "", "Force dismount"),
+                    FlagMapping::with_description("/i", "", "Less vigorous check"),
+                    FlagMapping::with_description("/c", "", "Skip cycle checking"),
+                    FlagMapping::with_description("/b", "", "Re-evaluate bad clusters"),
+                ]),
         );
         
         // ============================================================
         // Linux/Unix -> Windows mappings
         // ============================================================
         
-        // ls -> dir
+        // ls -> dir (comprehensive flag mapping)
         m.insert(
             MappingKey::new("ls", Os::Linux, Os::Windows),
             CommandMapping::new("ls", "dir")
                 .with_flags(vec![
-                    FlagMapping::with_description("-l", "", "Long format (default)"),
-                    FlagMapping::with_description("-a", "/a", "All files"),
+                    FlagMapping::with_description("-l", "", "Long format (default in dir)"),
+                    FlagMapping::with_description("-a", "/a", "All files including hidden"),
+                    FlagMapping::with_description("-A", "/a", "Almost all (exclude . and ..)"),
                     FlagMapping::with_description("-la", "/a", "All files long format"),
-                    FlagMapping::with_description("-R", "/s", "Recursive"),
+                    FlagMapping::with_description("-lA", "/a", "Almost all, long format"),
+                    FlagMapping::with_description("-R", "/s", "Recursive listing"),
                     FlagMapping::with_description("-1", "/b", "One file per line"),
+                    FlagMapping::with_description("-C", "/w", "Multi-column output"),
                     FlagMapping::with_description("-S", "/o:s", "Sort by size"),
                     FlagMapping::with_description("-t", "/o:d", "Sort by time"),
-                    FlagMapping::with_description("-r", "/o:-n", "Reverse order"),
+                    FlagMapping::with_description("-r", "/o:-n", "Reverse sort order"),
+                    FlagMapping::with_description("-X", "/o:e", "Sort by extension"),
+                    FlagMapping::with_description("-h", "", "Human readable sizes"),
+                    FlagMapping::with_description("-d", "", "List directories themselves"),
+                    FlagMapping::with_description("-F", "", "Append indicator"),
+                    FlagMapping::with_description("-i", "", "Show inode numbers"),
+                    FlagMapping::with_description("-n", "", "Numeric UID/GID"),
+                    FlagMapping::with_description("-o", "", "Long without group"),
+                    FlagMapping::with_description("-g", "", "Long without owner"),
+                    FlagMapping::with_description("-p", "", "Append / to directories"),
+                    FlagMapping::with_description("-Q", "", "Quote names"),
+                    FlagMapping::with_description("-s", "", "Show block size"),
+                    FlagMapping::with_description("-u", "/o:d", "Sort by access time"),
+                    FlagMapping::with_description("-U", "", "Unsorted"),
+                    FlagMapping::with_description("-v", "/o:n", "Natural sort of version"),
                     FlagMapping::with_description("--sort=size", "/o:s", "Sort by size"),
                     FlagMapping::with_description("--sort=time", "/o:d", "Sort by time"),
+                    FlagMapping::with_description("--sort=name", "/o:n", "Sort by name"),
+                    FlagMapping::with_description("--sort=extension", "/o:e", "Sort by extension"),
+                    FlagMapping::with_description("--sort=none", "", "Unsorted"),
+                    FlagMapping::with_description("--color", "", "Color output (N/A)"),
+                    FlagMapping::with_description("--color=auto", "", "Color when terminal"),
+                    FlagMapping::with_description("--color=never", "", "No color"),
                 ]),
         );
         
@@ -478,58 +594,143 @@ lazy_static! {
             MappingKey::new("ls", Os::MacOS, Os::Windows),
             CommandMapping::new("ls", "dir")
                 .with_flags(vec![
-                    FlagMapping::new("-l", ""),
-                    FlagMapping::new("-a", "/a"),
-                    FlagMapping::new("-la", "/a"),
-                    FlagMapping::new("-R", "/s"),
+                    FlagMapping::with_description("-l", "", "Long format"),
+                    FlagMapping::with_description("-a", "/a", "All files"),
+                    FlagMapping::with_description("-A", "/a", "Almost all"),
+                    FlagMapping::with_description("-la", "/a", "All files long"),
+                    FlagMapping::with_description("-R", "/s", "Recursive"),
+                    FlagMapping::with_description("-1", "/b", "One per line"),
+                    FlagMapping::with_description("-S", "/o:s", "Sort by size"),
+                    FlagMapping::with_description("-t", "/o:d", "Sort by time"),
+                    FlagMapping::with_description("-r", "/o:-n", "Reverse order"),
                 ]),
         );
         
-        // cp -> copy/xcopy
+        // cp -> copy/xcopy (comprehensive flag mapping)
         m.insert(
             MappingKey::new("cp", Os::Linux, Os::Windows),
             CommandMapping::new("cp", "copy")
                 .with_flags(vec![
-                    FlagMapping::with_description("-r", "xcopy /s /e", "Recursive copy"),
-                    FlagMapping::with_description("-R", "xcopy /s /e", "Recursive copy"),
+                    FlagMapping::with_description("-r", "xcopy /s /e /y", "Recursive copy"),
+                    FlagMapping::with_description("-R", "xcopy /s /e /y", "Recursive copy"),
                     FlagMapping::with_description("-f", "/y", "Force overwrite"),
-                    FlagMapping::with_description("-v", "/v", "Verbose"),
                     FlagMapping::with_description("-i", "/-y", "Interactive/confirm"),
+                    FlagMapping::with_description("-n", "/-y", "No clobber"),
+                    FlagMapping::with_description("-v", "/v", "Verbose"),
+                    FlagMapping::with_description("-u", "", "Update only"),
+                    FlagMapping::with_description("-p", "", "Preserve attributes"),
+                    FlagMapping::with_description("-a", "xcopy /s /e /h /k", "Archive mode"),
+                    FlagMapping::with_description("-l", "", "Create hard links"),
+                    FlagMapping::with_description("-s", "", "Create symbolic links"),
+                    FlagMapping::with_description("-L", "", "Follow symlinks"),
+                    FlagMapping::with_description("-P", "", "Don't follow symlinks"),
+                    FlagMapping::with_description("-d", "", "Copy symlinks as symlinks"),
+                    FlagMapping::with_description("-x", "", "Stay on filesystem"),
+                    FlagMapping::with_description("-t", "", "Target directory"),
+                    FlagMapping::with_description("-T", "", "Treat dest as normal file"),
+                    FlagMapping::with_description("--backup", "", "Make backup"),
+                    FlagMapping::with_description("--preserve", "", "Preserve attributes"),
                 ]),
         );
         
-        // mv -> move
+        m.insert(
+            MappingKey::new("cp", Os::MacOS, Os::Windows),
+            CommandMapping::new("cp", "copy")
+                .with_flags(vec![
+                    FlagMapping::with_description("-r", "xcopy /s /e /y", "Recursive"),
+                    FlagMapping::with_description("-R", "xcopy /s /e /y", "Recursive"),
+                    FlagMapping::with_description("-f", "/y", "Force"),
+                    FlagMapping::with_description("-i", "/-y", "Interactive"),
+                    FlagMapping::with_description("-v", "/v", "Verbose"),
+                    FlagMapping::with_description("-p", "", "Preserve attributes"),
+                ]),
+        );
+        
+        // mv -> move (comprehensive flag mapping)
         m.insert(
             MappingKey::new("mv", Os::Linux, Os::Windows),
             CommandMapping::new("mv", "move")
                 .with_flags(vec![
                     FlagMapping::with_description("-f", "/y", "Force overwrite"),
                     FlagMapping::with_description("-i", "/-y", "Interactive"),
+                    FlagMapping::with_description("-n", "/-y", "No clobber"),
+                    FlagMapping::with_description("-u", "", "Update only"),
+                    FlagMapping::with_description("-v", "", "Verbose"),
+                    FlagMapping::with_description("-t", "", "Target directory"),
+                    FlagMapping::with_description("-T", "", "Treat dest as file"),
+                    FlagMapping::with_description("--backup", "", "Make backup"),
                 ]),
         );
         
-        // rm -> del
+        m.insert(
+            MappingKey::new("mv", Os::MacOS, Os::Windows),
+            CommandMapping::new("mv", "move")
+                .with_flags(vec![
+                    FlagMapping::with_description("-f", "/y", "Force"),
+                    FlagMapping::with_description("-i", "/-y", "Interactive"),
+                    FlagMapping::with_description("-n", "/-y", "No clobber"),
+                    FlagMapping::with_description("-v", "", "Verbose"),
+                ]),
+        );
+        
+        // rm -> del (comprehensive flag mapping)
         m.insert(
             MappingKey::new("rm", Os::Linux, Os::Windows),
             CommandMapping::new("rm", "del")
                 .with_flags(vec![
-                    FlagMapping::with_description("-r", "/s", "Recursive"),
-                    FlagMapping::with_description("-R", "/s", "Recursive"),
-                    FlagMapping::with_description("-f", "/q /f", "Force/quiet"),
-                    FlagMapping::with_description("-rf", "/s /q", "Recursive force"),
-                    FlagMapping::with_description("-i", "/p", "Interactive"),
+                    FlagMapping::with_description("-r", "/s", "Recursive delete"),
+                    FlagMapping::with_description("-R", "/s", "Recursive delete"),
+                    FlagMapping::with_description("-f", "/q /f", "Force delete, quiet mode"),
+                    FlagMapping::with_description("-i", "/p", "Interactive prompt"),
+                    FlagMapping::with_description("-I", "/p", "Prompt once"),
+                    FlagMapping::with_description("-rf", "/s /q /f", "Recursive force"),
+                    FlagMapping::with_description("-fr", "/s /q /f", "Force recursive"),
+                    FlagMapping::with_description("-v", "", "Verbose"),
+                    FlagMapping::with_description("-d", "rmdir", "Remove empty directories"),
+                    FlagMapping::with_description("--preserve-root", "", "Don't delete /"),
+                    FlagMapping::with_description("--no-preserve-root", "", "Allow deleting /"),
+                    FlagMapping::with_description("--one-file-system", "", "Stay on filesystem"),
                 ]),
         );
         
-        // cat -> type
+        m.insert(
+            MappingKey::new("rm", Os::MacOS, Os::Windows),
+            CommandMapping::new("rm", "del")
+                .with_flags(vec![
+                    FlagMapping::with_description("-r", "/s", "Recursive"),
+                    FlagMapping::with_description("-R", "/s", "Recursive"),
+                    FlagMapping::with_description("-f", "/q /f", "Force"),
+                    FlagMapping::with_description("-i", "/p", "Interactive"),
+                    FlagMapping::with_description("-rf", "/s /q /f", "Recursive force"),
+                    FlagMapping::with_description("-v", "", "Verbose"),
+                    FlagMapping::with_description("-d", "rmdir", "Remove directories"),
+                    FlagMapping::with_description("-P", "", "Overwrite before delete"),
+                ]),
+        );
+        
+        // cat -> type (with additional handling)
         m.insert(
             MappingKey::new("cat", Os::Linux, Os::Windows),
-            CommandMapping::new("cat", "type"),
+            CommandMapping::new("cat", "type")
+                .with_flags(vec![
+                    FlagMapping::with_description("-n", "", "Number lines (N/A)"),
+                    FlagMapping::with_description("-b", "", "Number non-blank lines"),
+                    FlagMapping::with_description("-s", "", "Squeeze blank lines"),
+                    FlagMapping::with_description("-E", "", "Show line endings"),
+                    FlagMapping::with_description("-T", "", "Show tabs"),
+                    FlagMapping::with_description("-A", "", "Show all"),
+                    FlagMapping::with_description("-v", "", "Show non-printing"),
+                ]),
         );
         
         m.insert(
             MappingKey::new("cat", Os::MacOS, Os::Windows),
-            CommandMapping::new("cat", "type"),
+            CommandMapping::new("cat", "type")
+                .with_flags(vec![
+                    FlagMapping::with_description("-n", "", "Number lines"),
+                    FlagMapping::with_description("-b", "", "Number non-blank"),
+                    FlagMapping::with_description("-s", "", "Squeeze blanks"),
+                ]),
         );
         
         // clear -> cls
@@ -543,9 +744,42 @@ lazy_static! {
             CommandMapping::new("clear", "cls"),
         );
         
-        // grep -> findstr
+        // grep -> findstr (comprehensive flag mapping)
         m.insert(
             MappingKey::new("grep", Os::Linux, Os::Windows),
+            CommandMapping::new("grep", "findstr")
+                .with_flags(vec![
+                    FlagMapping::with_description("-i", "/i", "Case insensitive"),
+                    FlagMapping::with_description("-I", "/i", "Case insensitive"),
+                    FlagMapping::with_description("-r", "/s", "Recursive search"),
+                    FlagMapping::with_description("-R", "/s", "Recursive search"),
+                    FlagMapping::with_description("-n", "/n", "Show line numbers"),
+                    FlagMapping::with_description("-v", "/v", "Invert match"),
+                    FlagMapping::with_description("-c", "/c:", "Count matches"),
+                    FlagMapping::with_description("-l", "/m", "List files only"),
+                    FlagMapping::with_description("-L", "", "List non-matching files"),
+                    FlagMapping::with_description("-E", "/r", "Extended regex"),
+                    FlagMapping::with_description("-e", "", "Pattern"),
+                    FlagMapping::with_description("-f", "/g:", "Patterns from file"),
+                    FlagMapping::with_description("-w", "", "Whole word"),
+                    FlagMapping::with_description("-x", "/x", "Whole line"),
+                    FlagMapping::with_description("-o", "", "Only matching"),
+                    FlagMapping::with_description("-h", "", "No filename"),
+                    FlagMapping::with_description("-H", "", "With filename"),
+                    FlagMapping::with_description("-q", "", "Quiet mode"),
+                    FlagMapping::with_description("-s", "", "Suppress errors"),
+                    FlagMapping::with_description("-m", "", "Max count"),
+                    FlagMapping::with_description("-A", "", "After context"),
+                    FlagMapping::with_description("-B", "", "Before context"),
+                    FlagMapping::with_description("-C", "", "Context lines"),
+                    FlagMapping::with_description("--color", "", "Color output"),
+                    FlagMapping::with_description("--include", "", "Include pattern"),
+                    FlagMapping::with_description("--exclude", "", "Exclude pattern"),
+                ]),
+        );
+        
+        m.insert(
+            MappingKey::new("grep", Os::MacOS, Os::Windows),
             CommandMapping::new("grep", "findstr")
                 .with_flags(vec![
                     FlagMapping::with_description("-i", "/i", "Case insensitive"),
@@ -553,7 +787,8 @@ lazy_static! {
                     FlagMapping::with_description("-R", "/s", "Recursive"),
                     FlagMapping::with_description("-n", "/n", "Line numbers"),
                     FlagMapping::with_description("-v", "/v", "Invert match"),
-                    FlagMapping::with_description("-c", "/c:", "Count matches"),
+                    FlagMapping::with_description("-c", "/c:", "Count"),
+                    FlagMapping::with_description("-l", "/m", "List files"),
                     FlagMapping::with_description("-E", "/r", "Extended regex"),
                 ]),
         );
@@ -781,22 +1016,11 @@ lazy_static! {
             CommandMapping::new("pbcopy", "clip"),
         );
         
-        // pbpaste -> powershell Get-Clipboard (macOS to Windows - approximation)
+        // pbpaste -> powershell -command Get-Clipboard (macOS to Windows)
+        // Note: Requires PowerShell. For cmd.exe, there's no direct equivalent.
         m.insert(
             MappingKey::new("pbpaste", Os::MacOS, Os::Windows),
-            CommandMapping::new("pbpaste", "powershell Get-Clipboard"),
-        );
-        
-        // say -> no direct equivalent but can use msg or PowerShell
-        m.insert(
-            MappingKey::new("say", Os::MacOS, Os::Windows),
-            CommandMapping::new("say", "msg * /TIME:0"),
-        );
-        
-        // caffeinate -> powercfg (approximation - macOS to Windows)
-        m.insert(
-            MappingKey::new("caffeinate", Os::MacOS, Os::Windows),
-            CommandMapping::new("caffeinate", "powercfg"),
+            CommandMapping::new("pbpaste", "powershell -command Get-Clipboard"),
         );
         
         // Linux xclip -> pbcopy/pbpaste (Linux to macOS)
@@ -927,6 +1151,101 @@ pub fn get_mapping(command: &str, from_os: Os, to_os: Os) -> Option<&'static Com
     COMMAND_MAPPINGS.get(&key)
 }
 
+/// Check if a command is native to a specific OS
+/// Returns true if the command is known to be a native command for that OS
+pub fn is_native_command(command: &str, os: Os) -> bool {
+    let cmd_lower = command.to_lowercase();
+    
+    match os {
+        Os::Windows => {
+            // Windows native commands
+            matches!(cmd_lower.as_str(),
+                "dir" | "copy" | "xcopy" | "move" | "del" | "erase" | "rmdir" | "rd" |
+                "mkdir" | "md" | "type" | "cls" | "findstr" | "find" | "tasklist" |
+                "taskkill" | "ipconfig" | "systeminfo" | "hostname" | "whoami" | "set" |
+                "attrib" | "fc" | "more" | "ren" | "rename" | "tree" | "sort" | "where" |
+                "ping" | "tracert" | "netstat" | "chkdsk" | "start" | "clip" | "shutdown" |
+                "robocopy" | "icacls" | "takeown" | "sfc" | "dism" | "wmic" | "net" |
+                "sc" | "reg" | "powershell" | "cmd" | "echo" | "pause" | "exit" | "call" |
+                "if" | "for" | "goto" | "setlocal" | "endlocal" | "pushd" | "popd" |
+                "mklink" | "assoc" | "ftype" | "path" | "title" | "color" | "prompt" |
+                "ver" | "vol" | "label" | "format" | "diskpart" | "bcdedit" | "bootrec"
+            )
+        }
+        Os::Linux | Os::FreeBSD | Os::OpenBSD | Os::NetBSD | Os::Solaris | Os::Android => {
+            // Unix/Linux native commands
+            matches!(cmd_lower.as_str(),
+                "ls" | "cp" | "mv" | "rm" | "cat" | "clear" | "grep" | "ps" | "kill" |
+                "pkill" | "ifconfig" | "ip" | "uname" | "env" | "printenv" | "export" |
+                "chmod" | "chown" | "chgrp" | "diff" | "less" | "more" | "which" |
+                "whereis" | "touch" | "head" | "tail" | "ping" | "traceroute" | "ss" |
+                "netstat" | "tar" | "gzip" | "gunzip" | "bzip2" | "xz" | "zip" | "unzip" |
+                "curl" | "wget" | "df" | "du" | "ln" | "man" | "info" | "find" | "locate" |
+                "xdg-open" | "xclip" | "xsel" | "shutdown" | "reboot" | "halt" | "poweroff" |
+                "systemctl" | "service" | "apt" | "apt-get" | "yum" | "dnf" | "pacman" |
+                "zypper" | "emerge" | "pkg" | "brew" | "snap" | "flatpak" | "echo" | "printf" |
+                "test" | "expr" | "bc" | "awk" | "sed" | "cut" | "sort" | "uniq" | "wc" |
+                "tr" | "tee" | "xargs" | "date" | "cal" | "uptime" | "who" | "w" | "last" |
+                "id" | "groups" | "sudo" | "su" | "passwd" | "useradd" | "userdel" | "usermod" |
+                "groupadd" | "groupdel" | "crontab" | "at" | "jobs" | "fg" | "bg" | "nohup" |
+                "screen" | "tmux" | "ssh" | "scp" | "sftp" | "rsync" | "nc" | "telnet" |
+                "ftp" | "nmap" | "tcpdump" | "iptables" | "ufw" | "firewalld" | "mount" |
+                "umount" | "fdisk" | "parted" | "mkfs" | "fsck" | "dd" | "lsblk" | "blkid" |
+                "free" | "top" | "htop" | "vmstat" | "iostat" | "sar" | "strace" | "ltrace" |
+                "gdb" | "valgrind" | "make" | "gcc" | "g++" | "clang" | "ld" | "ar" | "nm" |
+                "objdump" | "readelf" | "ldd" | "git" | "svn" | "hg" | "cvs" | "patch" |
+                "alias" | "unalias" | "history" | "source" | "exit" | "logout" | "cd" | "pwd" |
+                "mkdir" | "rmdir" | "basename" | "dirname" | "realpath" | "readlink" | "stat" |
+                "file" | "strings" | "hexdump" | "od" | "xxd" | "base64" | "md5sum" | "sha1sum" |
+                "sha256sum" | "openssl" | "gpg" | "dmesg" | "journalctl" | "logger" | "syslog"
+            )
+        }
+        Os::MacOS | Os::Ios => {
+            // macOS native commands (BSD-based plus macOS specific)
+            matches!(cmd_lower.as_str(),
+                "ls" | "cp" | "mv" | "rm" | "cat" | "clear" | "grep" | "ps" | "kill" |
+                "pkill" | "ifconfig" | "uname" | "env" | "printenv" | "export" |
+                "chmod" | "chown" | "chgrp" | "diff" | "less" | "more" | "which" |
+                "whereis" | "touch" | "head" | "tail" | "ping" | "traceroute" |
+                "netstat" | "tar" | "gzip" | "gunzip" | "bzip2" | "xz" | "zip" | "unzip" |
+                "curl" | "df" | "du" | "ln" | "man" | "find" | "locate" | "mdfind" |
+                "open" | "pbcopy" | "pbpaste" | "say" | "caffeinate" | "osascript" |
+                "defaults" | "launchctl" | "diskutil" | "hdiutil" | "sw_vers" | "system_profiler" |
+                "softwareupdate" | "spctl" | "codesign" | "xcode-select" | "xcrun" |
+                "brew" | "port" | "shutdown" | "reboot" | "halt" | "echo" | "printf" |
+                "test" | "expr" | "bc" | "awk" | "sed" | "cut" | "sort" | "uniq" | "wc" |
+                "tr" | "tee" | "xargs" | "date" | "cal" | "uptime" | "who" | "w" | "last" |
+                "id" | "groups" | "sudo" | "su" | "passwd" | "dscl" | "dscacheutil" |
+                "crontab" | "at" | "jobs" | "fg" | "bg" | "nohup" | "screen" | "tmux" |
+                "ssh" | "scp" | "sftp" | "rsync" | "nc" | "telnet" | "ftp" | "nmap" |
+                "tcpdump" | "pfctl" | "mount" | "umount" | "dd" |
+                "top" | "vm_stat" | "fs_usage" | "dtrace" | "lldb" | "make" | "clang" |
+                "git" | "svn" | "hg" | "patch" | "alias" | "unalias" | "history" | "source" |
+                "exit" | "logout" | "cd" | "pwd" | "mkdir" | "rmdir" | "basename" | "dirname" |
+                "realpath" | "readlink" | "stat" | "file" | "strings" | "hexdump" | "od" |
+                "xxd" | "base64" | "md5" | "shasum" | "openssl" | "security" | "keychain"
+            )
+        }
+        Os::Unknown => false,
+    }
+}
+
+/// Check if a command exists as a target in mappings TO a specific OS
+/// This helps determine if a command is already in the target OS format
+pub fn is_target_command_for_os(command: &str, target_os: Os) -> bool {
+    let cmd_lower = command.to_lowercase();
+    
+    // Check if this command appears as a target_cmd in any mapping TO the target_os
+    COMMAND_MAPPINGS
+        .iter()
+        .filter(|(key, _)| key.to_os == target_os)
+        .any(|(_, mapping)| {
+            // Get the base command from target (handle cases like "cp -r")
+            let target_base = mapping.target_cmd.split_whitespace().next().unwrap_or("");
+            target_base.to_lowercase() == cmd_lower
+        })
+}
+
 /// Get all available commands for a specific OS transition
 pub fn get_available_commands(from_os: Os, to_os: Os) -> Vec<&'static str> {
     COMMAND_MAPPINGS
@@ -994,5 +1313,50 @@ mod tests {
         assert!(commands.contains(&"dir"));
         assert!(commands.contains(&"copy"));
         assert!(commands.contains(&"cls"));
+    }
+
+    #[test]
+    fn test_is_native_command_windows() {
+        assert!(is_native_command("dir", Os::Windows));
+        assert!(is_native_command("copy", Os::Windows));
+        assert!(is_native_command("cls", Os::Windows));
+        assert!(is_native_command("ipconfig", Os::Windows));
+        assert!(!is_native_command("ls", Os::Windows));
+        assert!(!is_native_command("grep", Os::Windows));
+    }
+
+    #[test]
+    fn test_is_native_command_linux() {
+        assert!(is_native_command("ls", Os::Linux));
+        assert!(is_native_command("grep", Os::Linux));
+        assert!(is_native_command("cat", Os::Linux));
+        assert!(is_native_command("chmod", Os::Linux));
+        assert!(!is_native_command("dir", Os::Linux));
+        assert!(!is_native_command("ipconfig", Os::Linux));
+    }
+
+    #[test]
+    fn test_is_native_command_macos() {
+        assert!(is_native_command("ls", Os::MacOS));
+        assert!(is_native_command("open", Os::MacOS));
+        assert!(is_native_command("pbcopy", Os::MacOS));
+        assert!(!is_native_command("dir", Os::MacOS));
+        assert!(!is_native_command("xdg-open", Os::MacOS));
+    }
+
+    #[test]
+    fn test_is_native_command_case_insensitive() {
+        assert!(is_native_command("DIR", Os::Windows));
+        assert!(is_native_command("Dir", Os::Windows));
+        assert!(is_native_command("LS", Os::Linux));
+        assert!(is_native_command("Grep", Os::Linux));
+    }
+
+    #[test]
+    fn test_is_target_command_for_os() {
+        // ls is a target command for Linux (from Windows -> Linux mappings)
+        assert!(is_target_command_for_os("ls", Os::Linux));
+        // dir is a target command for Windows (from Linux -> Windows mappings)
+        assert!(is_target_command_for_os("dir", Os::Windows));
     }
 }
