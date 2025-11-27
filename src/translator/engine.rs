@@ -489,6 +489,101 @@ fn split_compound_command(input: &str) -> Vec<String> {
     parts
 }
 
+/// Translate a script file extension between operating systems
+///
+/// # Arguments
+///
+/// * `filename` - The filename with extension to translate
+/// * `from_os` - The source operating system
+/// * `to_os` - The target operating system
+///
+/// # Returns
+///
+/// The filename with translated extension
+///
+/// # Example
+///
+/// ```
+/// use cmdx::{translate_script_extension, Os};
+///
+/// let result = translate_script_extension("script.bat", Os::Windows, Os::Linux);
+/// assert_eq!(result, "script.sh");
+///
+/// let result = translate_script_extension("script.sh", Os::Linux, Os::Windows);
+/// assert_eq!(result, "script.bat");
+/// ```
+pub fn translate_script_extension(filename: &str, from_os: Os, to_os: Os) -> String {
+    if from_os == to_os {
+        return filename.to_string();
+    }
+    
+    let filename = filename.trim();
+    
+    // Windows to Unix
+    if from_os == Os::Windows && to_os.is_unix_like() {
+        let filename_lower = filename.to_lowercase();
+        if let Some(base) = filename_lower.strip_suffix(".bat") {
+            return format!("{}.sh", &filename[..base.len()]);
+        }
+        if let Some(base) = filename_lower.strip_suffix(".cmd") {
+            return format!("{}.sh", &filename[..base.len()]);
+        }
+        if let Some(base) = filename_lower.strip_suffix(".ps1") {
+            return format!("{}.sh", &filename[..base.len()]);
+        }
+        if let Some(base) = filename_lower.strip_suffix(".exe") {
+            return filename[..base.len()].to_string();
+        }
+    }
+    
+    // Unix to Windows
+    if from_os.is_unix_like() && to_os == Os::Windows {
+        if let Some(base) = filename.strip_suffix(".sh") {
+            return format!("{}.bat", base);
+        }
+        // Files without extension might be executables - check using Path for robustness
+        if let Some(file_name) = std::path::Path::new(filename).file_name() {
+            let name = file_name.to_string_lossy();
+            if !name.contains('.') {
+                return format!("{}.exe", filename);
+            }
+        }
+    }
+    
+    filename.to_string()
+}
+
+/// Translate a shebang line from a script
+///
+/// # Arguments
+///
+/// * `line` - The shebang line (e.g., "#!/bin/bash")
+/// * `from_os` - The source operating system  
+/// * `to_os` - The target operating system
+///
+/// # Returns
+///
+/// The translated shebang or equivalent for target OS
+pub fn translate_shebang(line: &str, from_os: Os, to_os: Os) -> String {
+    if from_os == to_os {
+        return line.to_string();
+    }
+    
+    let line = line.trim();
+    
+    // Unix to Windows - remove shebang, add @echo off for batch
+    if from_os.is_unix_like() && to_os == Os::Windows && line.starts_with("#!") {
+        return "@echo off".to_string();
+    }
+    
+    // Windows to Unix - convert @echo off to shebang
+    if from_os == Os::Windows && to_os.is_unix_like() && line.to_lowercase().starts_with("@echo off") {
+        return "#!/bin/bash".to_string();
+    }
+    
+    line.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -783,5 +878,65 @@ mod tests {
         let result = result.unwrap();
         assert!(result.command.contains("ping"));
         assert!(result.command.contains("-c")); // -n becomes -c
+    }
+
+    #[test]
+    fn test_translate_script_extension_bat_to_sh() {
+        let result = translate_script_extension("script.bat", Os::Windows, Os::Linux);
+        assert_eq!(result, "script.sh");
+    }
+
+    #[test]
+    fn test_translate_script_extension_cmd_to_sh() {
+        let result = translate_script_extension("build.cmd", Os::Windows, Os::Linux);
+        assert_eq!(result, "build.sh");
+    }
+
+    #[test]
+    fn test_translate_script_extension_ps1_to_sh() {
+        let result = translate_script_extension("deploy.ps1", Os::Windows, Os::Linux);
+        assert_eq!(result, "deploy.sh");
+    }
+
+    #[test]
+    fn test_translate_script_extension_sh_to_bat() {
+        let result = translate_script_extension("script.sh", Os::Linux, Os::Windows);
+        assert_eq!(result, "script.bat");
+    }
+
+    #[test]
+    fn test_translate_script_extension_exe_removal() {
+        let result = translate_script_extension("program.exe", Os::Windows, Os::Linux);
+        assert_eq!(result, "program");
+    }
+
+    #[test]
+    fn test_translate_script_extension_add_exe() {
+        let result = translate_script_extension("program", Os::Linux, Os::Windows);
+        assert_eq!(result, "program.exe");
+    }
+
+    #[test]
+    fn test_translate_script_extension_same_os() {
+        let result = translate_script_extension("script.bat", Os::Windows, Os::Windows);
+        assert_eq!(result, "script.bat");
+    }
+
+    #[test]
+    fn test_translate_shebang_unix_to_windows() {
+        let result = translate_shebang("#!/bin/bash", Os::Linux, Os::Windows);
+        assert_eq!(result, "@echo off");
+    }
+
+    #[test]
+    fn test_translate_shebang_windows_to_unix() {
+        let result = translate_shebang("@echo off", Os::Windows, Os::Linux);
+        assert_eq!(result, "#!/bin/bash");
+    }
+
+    #[test]
+    fn test_translate_shebang_same_os() {
+        let result = translate_shebang("#!/bin/bash", Os::Linux, Os::Linux);
+        assert_eq!(result, "#!/bin/bash");
     }
 }

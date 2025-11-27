@@ -44,7 +44,7 @@ impl fmt::Display for PathTranslation {
 }
 
 /// Errors that can occur during path translation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PathError {
     /// Empty path
     EmptyPath,

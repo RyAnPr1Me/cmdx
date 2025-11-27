@@ -10,7 +10,9 @@ A high-performance cross-platform command and path translator library for Rust. 
 - **Compound Commands**: Translate multi-command pipelines with `&&`, `||`, `|`, and `;`
 - **Path Translation**: Bidirectional file path translation (e.g., `C:\Users` ↔ `/mnt/c/Users`)
 - **Environment Variables**: Translate environment variable syntax (`%VAR%` ↔ `$VAR`)
+- **Script Translation**: Convert script extensions (`.bat` ↔ `.sh`) and shebangs
 - **OS Detection**: Runtime detection of the current operating system
+- **Serde Support**: All result types support serialization/deserialization
 - **High Performance**: Static lookup tables with lazy initialization
 
 ## Installation
@@ -146,6 +148,26 @@ let paths = vec!["C:\\Users", "D:\\Documents"];
 let results = translate_paths(&paths, Os::Windows, Os::Linux);
 ```
 
+### Script File Translation
+
+```rust
+use cmdx::{translate_script_extension, translate_shebang, Os};
+
+// Translate script file extensions
+let result = translate_script_extension("build.bat", Os::Windows, Os::Linux);
+assert_eq!(result, "build.sh");
+
+let result = translate_script_extension("deploy.sh", Os::Linux, Os::Windows);
+assert_eq!(result, "deploy.bat");
+
+// Translate shebangs
+let result = translate_shebang("#!/bin/bash", Os::Linux, Os::Windows);
+assert_eq!(result, "@echo off");
+
+let result = translate_shebang("@echo off", Os::Windows, Os::Linux);
+assert_eq!(result, "#!/bin/bash");
+```
+
 ### Terminal Emulator Integration
 
 ```rust
@@ -217,6 +239,15 @@ fn process_input(input: &str, target_os: Os) -> String {
 | `pbcopy` | `clip` | `xclip` |
 | `pbpaste` | `Get-Clipboard` | `xclip -o` |
 
+## Script Extension Mappings
+
+| Windows | Unix |
+|---------|------|
+| `.bat` | `.sh` |
+| `.cmd` | `.sh` |
+| `.ps1` | `.sh` |
+| `.exe` | (no extension) |
+
 ## Environment Variable Mappings
 
 | Windows | Unix |
@@ -226,6 +257,8 @@ fn process_input(input: &str, target_os: Os) -> String {
 | `%TEMP%` / `%TMP%` | `$TMPDIR` |
 | `%APPDATA%` | `$XDG_CONFIG_HOME` |
 | `%COMPUTERNAME%` | `$HOSTNAME` |
+| `%CD%` | `$PWD` |
+| `%COMSPEC%` | `$SHELL` |
 
 ## Path Translation Mappings
 

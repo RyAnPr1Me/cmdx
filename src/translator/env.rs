@@ -36,6 +36,14 @@ lazy_static! {
         m.insert("COMPUTERNAME", "HOSTNAME");
         m.insert("CD", "PWD");
         m.insert("COMSPEC", "SHELL");
+        m.insert("HOMEDRIVE", "HOME");
+        m.insert("HOMEPATH", "HOME");
+        m.insert("SYSTEMROOT", "/");
+        m.insert("WINDIR", "/");
+        m.insert("PROGRAMFILES", "/usr/local");
+        m.insert("COMMONPROGRAMFILES", "/usr/local");
+        m.insert("PROGRAMDATA", "/var");
+        m.insert("ALLUSERSPROFILE", "/var");
         m
     };
 
