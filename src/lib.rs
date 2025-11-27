@@ -72,11 +72,14 @@
 pub mod translator;
 
 // Command translation exports
-pub use translator::command_map::{CommandMapping, FlagMapping};
-pub use translator::engine::{translate_command, translate_command_str, translate_batch, TranslationResult, TranslationError};
+pub use translator::command_map::{CommandMapping, FlagMapping, is_native_command, is_target_command_for_os};
+pub use translator::engine::{translate_command, translate_command_str, translate_batch, translate_compound_command, translate_full, translate_script_extension, translate_shebang, TranslationResult, TranslationError};
 
 // Path translation exports
 pub use translator::path::{translate_path, translate_path_str, translate_path_auto, translate_paths, PathTranslation, PathError, is_windows_path, is_unix_path};
+
+// Environment variable translation exports
+pub use translator::env::{translate_env_vars, translate_with_env};
 
 // OS detection exports
 pub use translator::os::{Os, detect_os};
