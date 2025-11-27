@@ -683,8 +683,9 @@ lazy_static! {
                     FlagMapping::with_description("-f", "/q /f", "Force delete, quiet mode"),
                     FlagMapping::with_description("-i", "/p", "Interactive prompt"),
                     FlagMapping::with_description("-I", "/p", "Prompt once"),
-                    FlagMapping::with_description("-rf", "/s /q /f", "Recursive force"),
-                    FlagMapping::with_description("-fr", "/s /q /f", "Force recursive"),
+                    // Both -rf and -fr are commonly used variants (order doesn't matter in rm)
+                    FlagMapping::with_description("-rf", "/s /q /f", "Recursive force (common shorthand)"),
+                    FlagMapping::with_description("-fr", "/s /q /f", "Force recursive (equivalent to -rf)"),
                     FlagMapping::with_description("-v", "", "Verbose"),
                     FlagMapping::with_description("-d", "rmdir", "Remove empty directories"),
                     FlagMapping::with_description("--preserve-root", "", "Don't delete /"),

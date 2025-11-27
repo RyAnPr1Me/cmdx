@@ -23,11 +23,10 @@ use std::collections::HashMap;
 
 lazy_static! {
     /// Common environment variable name mappings between Windows and Unix
-    /// Note: Only exact equivalents are mapped. Variables without direct equivalents
-    /// are passed through unchanged to preserve semantics.
+    /// Variables without direct equivalents are passed through with the original name.
     static ref ENV_VAR_MAPPINGS: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
-        // Windows -> Unix mappings (only exact equivalents)
+        // Windows -> Unix mappings (exact equivalents)
         m.insert("USERPROFILE", "HOME");
         m.insert("USERNAME", "USER");
         m.insert("APPDATA", "XDG_CONFIG_HOME");
@@ -36,12 +35,7 @@ lazy_static! {
         m.insert("TMP", "TMPDIR");
         m.insert("COMPUTERNAME", "HOSTNAME");
         m.insert("CD", "PWD");
-        m.insert("PATHEXT", ""); // No direct Unix equivalent
         m.insert("COMSPEC", "SHELL");
-        m.insert("PROGRAMFILES", "/usr/local");
-        m.insert("PROGRAMFILES(X86)", "/usr/local");
-        m.insert("ALLUSERSPROFILE", "/etc");
-        m.insert("PUBLIC", "/tmp");
         m
     };
 
@@ -57,8 +51,6 @@ lazy_static! {
         m.insert("HOSTNAME", "COMPUTERNAME");
         m.insert("PWD", "CD");
         m.insert("SHELL", "COMSPEC");
-        m.insert("LANG", ""); // No direct Windows equivalent
-        m.insert("LC_ALL", ""); // No direct Windows equivalent
         m
     };
 }
@@ -122,14 +114,14 @@ fn translate_windows_to_unix_env(input: &str) -> String {
                 let end = end + i + 1;
                 let var_name: String = chars[i + 1..end].iter().collect();
                 
-                // Check for known mappings
+                // Check for known mappings, use original name if not found
                 let mapped_name = ENV_VAR_MAPPINGS
                     .get(var_name.to_uppercase().as_str())
-                    .map(|&s| s.to_string())
-                    .unwrap_or(var_name);
+                    .copied()
+                    .unwrap_or(&var_name);
                 
                 result.push('$');
-                result.push_str(&mapped_name);
+                result.push_str(mapped_name);
                 i = end + 1;
                 continue;
             }
@@ -155,13 +147,14 @@ fn translate_unix_to_windows_env(input: &str) -> String {
                     let end = end + i + 2;
                     let var_name: String = chars[i + 2..end].iter().collect();
                     
+                    // Check for known mappings, use original name if not found
                     let mapped_name = ENV_VAR_MAPPINGS_REVERSE
                         .get(var_name.to_uppercase().as_str())
-                        .map(|&s| s.to_string())
-                        .unwrap_or(var_name);
+                        .copied()
+                        .unwrap_or(&var_name);
                     
                     result.push('%');
-                    result.push_str(&mapped_name);
+                    result.push_str(mapped_name);
                     result.push('%');
                     i = end + 1;
                     continue;
@@ -177,13 +170,14 @@ fn translate_unix_to_windows_env(input: &str) -> String {
                 
                 let var_name: String = chars[start..end].iter().collect();
                 
+                // Check for known mappings, use original name if not found
                 let mapped_name = ENV_VAR_MAPPINGS_REVERSE
                     .get(var_name.to_uppercase().as_str())
-                    .map(|&s| s.to_string())
-                    .unwrap_or(var_name);
+                    .copied()
+                    .unwrap_or(&var_name);
                 
                 result.push('%');
-                result.push_str(&mapped_name);
+                result.push_str(mapped_name);
                 result.push('%');
                 i = end;
                 continue;

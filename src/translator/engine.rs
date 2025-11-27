@@ -455,7 +455,7 @@ fn split_compound_command(input: &str) -> Vec<String> {
     while i < chars.len() {
         // Check for two-character operators first
         if i + 1 < chars.len() {
-            let two_char: String = chars[i..=i+1].iter().collect();
+            let two_char = format!("{}{}", chars[i], chars[i + 1]);
             if two_char == "&&" || two_char == "||" {
                 if !current.is_empty() {
                     parts.push(current);
