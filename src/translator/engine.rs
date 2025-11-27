@@ -1,12 +1,13 @@
 //! Translation engine - core logic for translating commands between operating systems
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use super::command_map::{get_mapping, CommandMapping};
 use super::os::Os;
 
 /// Result of a command translation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslationResult {
     /// The translated command
     pub command: String,
@@ -42,7 +43,7 @@ impl fmt::Display for TranslationResult {
 }
 
 /// Errors that can occur during translation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TranslationError {
     /// Command not found in mapping
     CommandNotFound(String),
@@ -281,6 +282,146 @@ pub fn translate_batch(
         .collect()
 }
 
+/// Operators used in compound commands
+const COMPOUND_OPERATORS: &[&str] = &["&&", "||", ";", "|"];
+
+/// Translate a compound command containing operators like `&&`, `||`, `;`, or `|`
+///
+/// This function splits the input by operators, translates each command individually,
+/// and then joins them back together.
+///
+/// # Arguments
+///
+/// * `input` - The compound command string to translate
+/// * `from_os` - The source operating system
+/// * `to_os` - The target operating system
+///
+/// # Returns
+///
+/// * `Ok(TranslationResult)` - The translated compound command
+/// * `Err(TranslationError)` - Error if any command translation fails
+///
+/// # Example
+///
+/// ```
+/// use cmdx::{translate_compound_command, Os};
+///
+/// let result = translate_compound_command("dir && cls", Os::Windows, Os::Linux);
+/// assert!(result.is_ok());
+/// let result = result.unwrap();
+/// assert!(result.command.contains("ls"));
+/// assert!(result.command.contains("clear"));
+/// ```
+pub fn translate_compound_command(
+    input: &str,
+    from_os: Os,
+    to_os: Os,
+) -> Result<TranslationResult, TranslationError> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(TranslationError::EmptyCommand);
+    }
+
+    // Same OS - just return the input
+    if from_os == to_os {
+        return Ok(TranslationResult::new(
+            trimmed.to_string(),
+            trimmed.to_string(),
+            from_os,
+            to_os,
+        ));
+    }
+
+    // Split the command by operators while preserving the operators
+    let parts = split_compound_command(trimmed);
+    
+    // If there's only one part, use regular translation
+    if parts.len() == 1 {
+        return translate_command(trimmed, from_os, to_os);
+    }
+
+    let mut result = TranslationResult::new(
+        String::new(),
+        trimmed.to_string(),
+        from_os,
+        to_os,
+    );
+
+    let mut translated_parts = Vec::new();
+    
+    for part in &parts {
+        let trimmed_part = part.trim();
+        
+        // Check if this part is an operator
+        if COMPOUND_OPERATORS.contains(&trimmed_part) {
+            translated_parts.push(trimmed_part.to_string());
+        } else if !trimmed_part.is_empty() {
+            // Translate the command
+            match translate_command(trimmed_part, from_os, to_os) {
+                Ok(cmd_result) => {
+                    translated_parts.push(cmd_result.command);
+                    // Collect warnings
+                    result.warnings.extend(cmd_result.warnings);
+                    result.had_unmapped_flags |= cmd_result.had_unmapped_flags;
+                }
+                Err(TranslationError::CommandNotFound(_)) => {
+                    // Keep original command if not found (might be a custom/unknown command)
+                    translated_parts.push(trimmed_part.to_string());
+                    result.warnings.push(format!("Command '{}' was not translated", trimmed_part.split_whitespace().next().unwrap_or(trimmed_part)));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    result.command = translated_parts.join(" ");
+    Ok(result)
+}
+
+/// Split a compound command by operators while preserving the operators
+fn split_compound_command(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        // Check for two-character operators first
+        if i + 1 < chars.len() {
+            let two_char: String = chars[i..=i+1].iter().collect();
+            if two_char == "&&" || two_char == "||" {
+                if !current.is_empty() {
+                    parts.push(current);
+                    current = String::new();
+                }
+                parts.push(two_char);
+                i += 2;
+                continue;
+            }
+        }
+        
+        // Check for single-character operators
+        if chars[i] == '|' || chars[i] == ';' {
+            if !current.is_empty() {
+                parts.push(current);
+                current = String::new();
+            }
+            parts.push(chars[i].to_string());
+            i += 1;
+            continue;
+        }
+
+        current.push(chars[i]);
+        i += 1;
+    }
+
+    if !current.is_empty() {
+        parts.push(current);
+    }
+
+    parts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,5 +607,63 @@ mod tests {
         let result = result.unwrap();
         assert!(result.command.contains("ping"));
         assert!(result.command.contains("-c"));
+    }
+
+    #[test]
+    fn test_compound_command_and() {
+        let result = translate_compound_command("dir && cls", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.command.contains("ls"));
+        assert!(result.command.contains("&&"));
+        assert!(result.command.contains("clear"));
+    }
+
+    #[test]
+    fn test_compound_command_or() {
+        let result = translate_compound_command("dir || cls", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.command.contains("ls"));
+        assert!(result.command.contains("||"));
+        assert!(result.command.contains("clear"));
+    }
+
+    #[test]
+    fn test_compound_command_pipe() {
+        let result = translate_compound_command("dir | findstr test", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.command.contains("ls"));
+        assert!(result.command.contains("|"));
+        assert!(result.command.contains("grep"));
+    }
+
+    #[test]
+    fn test_compound_command_semicolon() {
+        let result = translate_compound_command("ls; clear", Os::Linux, Os::Windows);
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.command.contains("dir"));
+        assert!(result.command.contains(";"));
+        assert!(result.command.contains("cls"));
+    }
+
+    #[test]
+    fn test_compound_command_single() {
+        let result = translate_compound_command("dir", Os::Windows, Os::Linux);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().command, "ls");
+    }
+
+    #[test]
+    fn test_split_compound_command() {
+        let parts = split_compound_command("dir && cls || type");
+        assert_eq!(parts.len(), 5);
+        assert_eq!(parts[0].trim(), "dir");
+        assert_eq!(parts[1], "&&");
+        assert_eq!(parts[2].trim(), "cls");
+        assert_eq!(parts[3], "||");
+        assert_eq!(parts[4].trim(), "type");
     }
 }

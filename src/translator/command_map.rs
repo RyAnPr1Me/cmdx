@@ -756,6 +756,128 @@ lazy_static! {
         );
         
         // ============================================================
+        // macOS specific additions
+        // ============================================================
+        
+        // open -> start (macOS to Windows)
+        m.insert(
+            MappingKey::new("open", Os::MacOS, Os::Windows),
+            CommandMapping::new("open", "start")
+                .with_flags(vec![
+                    FlagMapping::with_description("-a", "", "Open with application"),
+                    FlagMapping::with_description("-R", "", "Reveal in Finder"),
+                ]),
+        );
+        
+        // start -> open (Windows to macOS)
+        m.insert(
+            MappingKey::new("start", Os::Windows, Os::MacOS),
+            CommandMapping::new("start", "open"),
+        );
+        
+        // pbcopy -> clip (macOS to Windows)
+        m.insert(
+            MappingKey::new("pbcopy", Os::MacOS, Os::Windows),
+            CommandMapping::new("pbcopy", "clip"),
+        );
+        
+        // pbpaste -> powershell Get-Clipboard (macOS to Windows - approximation)
+        m.insert(
+            MappingKey::new("pbpaste", Os::MacOS, Os::Windows),
+            CommandMapping::new("pbpaste", "powershell Get-Clipboard"),
+        );
+        
+        // say -> no direct equivalent but can use msg or PowerShell
+        m.insert(
+            MappingKey::new("say", Os::MacOS, Os::Windows),
+            CommandMapping::new("say", "msg * /TIME:0"),
+        );
+        
+        // caffeinate -> powercfg (approximation - macOS to Windows)
+        m.insert(
+            MappingKey::new("caffeinate", Os::MacOS, Os::Windows),
+            CommandMapping::new("caffeinate", "powercfg"),
+        );
+        
+        // Linux xclip -> pbcopy/pbpaste (Linux to macOS)
+        m.insert(
+            MappingKey::new("xclip", Os::Linux, Os::MacOS),
+            CommandMapping::new("xclip", "pbcopy"),
+        );
+        
+        // xdg-open -> open (Linux to macOS)
+        m.insert(
+            MappingKey::new("xdg-open", Os::Linux, Os::MacOS),
+            CommandMapping::new("xdg-open", "open"),
+        );
+        
+        // open -> xdg-open (macOS to Linux)
+        m.insert(
+            MappingKey::new("open", Os::MacOS, Os::Linux),
+            CommandMapping::new("open", "xdg-open"),
+        );
+        
+        // pbcopy -> xclip (macOS to Linux)
+        m.insert(
+            MappingKey::new("pbcopy", Os::MacOS, Os::Linux),
+            CommandMapping::new("pbcopy", "xclip -selection clipboard"),
+        );
+        
+        // pbpaste -> xclip -o (macOS to Linux)
+        m.insert(
+            MappingKey::new("pbpaste", Os::MacOS, Os::Linux),
+            CommandMapping::new("pbpaste", "xclip -selection clipboard -o"),
+        );
+        
+        // Additional common commands
+        
+        // start -> xdg-open (Windows to Linux)
+        m.insert(
+            MappingKey::new("start", Os::Windows, Os::Linux),
+            CommandMapping::new("start", "xdg-open"),
+        );
+        
+        // clip -> xclip (Windows to Linux)
+        m.insert(
+            MappingKey::new("clip", Os::Windows, Os::Linux),
+            CommandMapping::new("clip", "xclip -selection clipboard"),
+        );
+        
+        // xdg-open -> start (Linux to Windows)
+        m.insert(
+            MappingKey::new("xdg-open", Os::Linux, Os::Windows),
+            CommandMapping::new("xdg-open", "start"),
+        );
+        
+        // xclip -> clip (Linux to Windows)
+        m.insert(
+            MappingKey::new("xclip", Os::Linux, Os::Windows),
+            CommandMapping::new("xclip", "clip"),
+        );
+        
+        // shutdown commands
+        m.insert(
+            MappingKey::new("shutdown", Os::Windows, Os::Linux),
+            CommandMapping::new("shutdown", "shutdown")
+                .with_flags(vec![
+                    FlagMapping::with_description("/s", "-h now", "Shutdown"),
+                    FlagMapping::with_description("/r", "-r now", "Restart"),
+                    FlagMapping::with_description("/t", "-t", "Timeout"),
+                    FlagMapping::with_description("/a", "-c", "Abort"),
+                ]),
+        );
+        
+        m.insert(
+            MappingKey::new("shutdown", Os::Linux, Os::Windows),
+            CommandMapping::new("shutdown", "shutdown")
+                .with_flags(vec![
+                    FlagMapping::with_description("-h", "/s", "Shutdown"),
+                    FlagMapping::with_description("-r", "/r", "Restart"),
+                    FlagMapping::with_description("-c", "/a", "Abort"),
+                ]),
+        );
+        
+        // ============================================================
         // BSD specific mappings
         // ============================================================
         

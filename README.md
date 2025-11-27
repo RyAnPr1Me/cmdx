@@ -6,7 +6,9 @@ A high-performance cross-platform command and path translator library for Rust. 
 
 - **Command Translation**: Translate shell commands between Windows, Linux, macOS, BSD, and more
 - **Flag Translation**: Automatically translates command flags/options (e.g., `dir /w` → `ls -C`)
+- **Compound Commands**: Translate multi-command pipelines with `&&`, `||`, `|`, and `;`
 - **Path Translation**: Bidirectional file path translation (e.g., `C:\Users` ↔ `/mnt/c/Users`)
+- **Environment Variables**: Translate environment variable syntax (`%VAR%` ↔ `$VAR`)
 - **OS Detection**: Runtime detection of the current operating system
 - **High Performance**: Static lookup tables with lazy initialization
 
@@ -38,6 +40,34 @@ println!("{}", result.command);  // "findstr /i pattern"
 for warning in &result.warnings {
     println!("Warning: {}", warning);
 }
+```
+
+### Compound Command Translation
+
+```rust
+use cmdx::{translate_compound_command, Os};
+
+// Translate commands with operators
+let result = translate_compound_command("dir && cls", Os::Windows, Os::Linux)?;
+println!("{}", result.command);  // "ls && clear"
+
+// Pipe operators work too
+let result = translate_compound_command("dir | findstr test", Os::Windows, Os::Linux)?;
+println!("{}", result.command);  // "ls | grep test"
+```
+
+### Environment Variable Translation
+
+```rust
+use cmdx::{translate_env_vars, Os};
+
+// Windows to Unix
+let result = translate_env_vars("echo %USERPROFILE%", Os::Windows, Os::Linux);
+println!("{}", result);  // "echo $HOME"
+
+// Unix to Windows
+let result = translate_env_vars("echo $HOME", Os::Linux, Os::Windows);
+println!("{}", result);  // "echo %USERPROFILE%"
 ```
 
 ### Path Translation
@@ -100,24 +130,27 @@ let results = translate_paths(&paths, Os::Windows, Os::Linux);
 ### Terminal Emulator Integration
 
 ```rust
-use cmdx::{translate_command, translate_path, detect_os, Os};
+use cmdx::{translate_command, translate_path, translate_env_vars, detect_os, Os};
 
 /// Process user input and translate for target OS
 fn process_input(input: &str, target_os: Os) -> String {
     let current_os = detect_os();
     
-    // Try command translation first
-    if let Ok(result) = translate_command(input, current_os, target_os) {
+    // Translate environment variables first
+    let input = translate_env_vars(input, current_os, target_os);
+    
+    // Try command translation
+    if let Ok(result) = translate_command(&input, current_os, target_os) {
         return result.command;
     }
     
     // Fall back to path translation if it looks like a path
-    if let Ok(result) = translate_path(input, current_os, target_os) {
+    if let Ok(result) = translate_path(&input, current_os, target_os) {
         return result.path;
     }
     
-    // Return original if no translation needed
-    input.to_string()
+    // Return the env-translated input if no other translation needed
+    input
 }
 ```
 
@@ -137,7 +170,9 @@ fn process_input(input: &str, target_os: Os) -> String {
 | `tasklist` | `ps aux` | |
 | `ipconfig` | `ip addr` | |
 | `ping -n` | `ping -c` | Count flag translation |
-| And 30+ more... | | |
+| `start` | `xdg-open` | Open files/URLs |
+| `clip` | `xclip` | Clipboard |
+| And 40+ more... | | |
 
 ### Linux → Windows
 
@@ -151,7 +186,27 @@ fn process_input(input: &str, target_os: Os) -> String {
 | `cat` | `type` | |
 | `grep` | `findstr` | |
 | `ps` | `tasklist` | |
-| And 30+ more... | | |
+| `xdg-open` | `start` | Open files/URLs |
+| `xclip` | `clip` | Clipboard |
+| And 40+ more... | | |
+
+### macOS Commands
+
+| macOS | Windows | Linux |
+|-------|---------|-------|
+| `open` | `start` | `xdg-open` |
+| `pbcopy` | `clip` | `xclip` |
+| `pbpaste` | `Get-Clipboard` | `xclip -o` |
+
+## Environment Variable Mappings
+
+| Windows | Unix |
+|---------|------|
+| `%USERPROFILE%` | `$HOME` |
+| `%USERNAME%` | `$USER` |
+| `%TEMP%` / `%TMP%` | `$TMPDIR` |
+| `%APPDATA%` | `$XDG_CONFIG_HOME` |
+| `%COMPUTERNAME%` | `$HOSTNAME` |
 
 ## Path Translation Mappings
 
