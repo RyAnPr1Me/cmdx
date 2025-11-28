@@ -1,10 +1,11 @@
 // entry.rs or lib.rs
 
-mod engine.rs;
+mod engine;
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use cmdx::{translate_full, Os};
+use engine::{translate_full, Os};
+
 
 /// Translates a Windows command string to Linux using cmdx.
 /// Returns a newly allocated C string. Must be freed with free_string.
