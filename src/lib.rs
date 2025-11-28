@@ -1,4 +1,5 @@
 // entry.rs or lib.rs
+use translate_full; // if defined in the same crate
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
