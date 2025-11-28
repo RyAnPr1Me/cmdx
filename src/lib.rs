@@ -1,6 +1,6 @@
 // entry.rs or lib.rs
 
-mod engine.rs
+mod engine.rs;
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
