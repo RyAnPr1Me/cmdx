@@ -30,7 +30,7 @@ cmdx = "0.1"
 
 ### Package Manager Translation (NEW!)
 
-Translate package manager commands between different Linux distributions:
+Translate package manager commands between different Linux distributions, **including flags**:
 
 ```rust
 use cmdx::{translate_package_command, PackageManager};
@@ -47,14 +47,22 @@ println!("{}", result.command);  // "pacman -R httpd"
 let result = translate_package_command("apt update", PackageManager::Apt, PackageManager::Zypper)?;
 println!("{}", result.command);  // "zypper refresh"
 
+// Flags are automatically translated!
+let result = translate_package_command("apt install -y vim", PackageManager::Apt, PackageManager::Pacman)?;
+println!("{}", result.command);  // "pacman -S --noconfirm vim"
+
+// Multiple flags work too
+let result = translate_package_command("apt install -y -q vim", PackageManager::Apt, PackageManager::Dnf)?;
+println!("{}", result.command);  // "dnf install -y -q vim"
+
 // Auto-detect source package manager
 use cmdx::translate_package_command_auto;
 let result = translate_package_command_auto("apt search nginx", PackageManager::Dnf)?;
 println!("{}", result.command);  // "dnf search nginx"
 
-// Works with sudo prefix
-let result = translate_package_command("sudo apt install vim", PackageManager::Apt, PackageManager::Pacman)?;
-println!("{}", result.command);  // "sudo pacman -S vim"
+// Works with sudo prefix and flags
+let result = translate_package_command("sudo apt install -y vim", PackageManager::Apt, PackageManager::Pacman)?;
+println!("{}", result.command);  // "sudo pacman -S --noconfirm vim"
 ```
 
 ### Full Command + Path Translation
@@ -269,6 +277,20 @@ Additional supported package managers:
 - **Emerge** (Gentoo): `emerge`, `emerge --unmerge`, `emerge --sync`, etc.
 - **XBPS** (Void Linux): `xbps-install`, `xbps-remove`, `xbps-query`, etc.
 - **Nix** (NixOS): `nix-env -i`, `nix-env -e`, `nix-env -u`, etc.
+
+### Package Manager Flag Translation
+
+Common flags are automatically translated between package managers:
+
+| Flag Purpose | APT | DNF/YUM | Pacman | Zypper |
+|--------------|-----|---------|--------|--------|
+| **Assume yes** | `-y`, `--yes` | `-y` | `--noconfirm` | `-y` |
+| **Quiet mode** | `-q`, `--quiet` | `-q` | `-q` | `-q` |
+| **Reinstall** | `--reinstall` | `--reinstall` | — | `--force` |
+| **No recommends** | `--no-install-recommends` | `--setopt=install_weak_deps=False` | `--asdeps` | — |
+| **Purge configs** | `--purge` | — | `-n` | — |
+| **Auto-remove deps** | `--auto-remove` | `--noautoremove` | `-s` | `--clean-deps` |
+| **Verbose** | `-v` | `-v` | — | `-v` |
 
 ### OS-Level Commands
 

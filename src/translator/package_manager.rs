@@ -121,6 +121,35 @@ impl fmt::Display for PackageTranslationError {
 
 impl std::error::Error for PackageTranslationError {}
 
+/// Flag mapping for package manager operations
+#[derive(Debug, Clone)]
+pub struct PackageFlagMapping {
+    /// The source flag
+    pub source: String,
+    /// The target flag
+    pub target: String,
+    /// Description of what this flag does
+    pub description: Option<String>,
+}
+
+impl PackageFlagMapping {
+    pub fn new(source: &str, target: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            target: target.to_string(),
+            description: None,
+        }
+    }
+
+    pub fn with_description(source: &str, target: &str, description: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            target: target.to_string(),
+            description: Some(description.to_string()),
+        }
+    }
+}
+
 /// Mapping for a package manager operation
 #[derive(Debug, Clone)]
 struct OperationMapping {
@@ -128,14 +157,45 @@ struct OperationMapping {
     command: String,
     /// Whether this operation requires sudo
     requires_sudo: bool,
+    /// Flag mappings for this operation
+    flag_mappings: Vec<PackageFlagMapping>,
     /// Additional flags or notes
     notes: Option<String>,
+}
+
+impl OperationMapping {
+    fn new(command: &str, requires_sudo: bool) -> Self {
+        Self {
+            command: command.to_string(),
+            requires_sudo,
+            flag_mappings: Vec::new(),
+            notes: None,
+        }
+    }
+
+    fn with_flags(mut self, flags: Vec<PackageFlagMapping>) -> Self {
+        self.flag_mappings = flags;
+        self
+    }
+
+    fn with_notes(mut self, notes: &str) -> Self {
+        self.notes = Some(notes.to_string());
+        self
+    }
 }
 
 /// Key for looking up operation mappings
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct OperationKey {
     pm: PackageManager,
+    op: PackageOperation,
+}
+
+/// Key for looking up flag mappings between package managers
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct FlagMappingKey {
+    from_pm: PackageManager,
+    to_pm: PackageManager,
     op: PackageOperation,
 }
 
@@ -149,39 +209,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Install },
-            OperationMapping { command: "apt install".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apt install", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Remove },
-            OperationMapping { command: "apt remove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apt remove", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Update },
-            OperationMapping { command: "apt update".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apt update", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Upgrade },
-            OperationMapping { command: "apt upgrade".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apt upgrade", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Search },
-            OperationMapping { command: "apt search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("apt search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Info },
-            OperationMapping { command: "apt show".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("apt show", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::List },
-            OperationMapping { command: "apt list --installed".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("apt list --installed", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::Clean },
-            OperationMapping { command: "apt clean".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apt clean", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apt, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "apt autoremove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apt autoremove", true),
         );
 
         // ============================================================
@@ -189,39 +249,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Install },
-            OperationMapping { command: "yum install".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("yum install", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Remove },
-            OperationMapping { command: "yum remove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("yum remove", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Update },
-            OperationMapping { command: "yum check-update".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("yum check-update", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Upgrade },
-            OperationMapping { command: "yum update".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("yum update", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Search },
-            OperationMapping { command: "yum search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("yum search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Info },
-            OperationMapping { command: "yum info".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("yum info", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::List },
-            OperationMapping { command: "yum list installed".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("yum list installed", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::Clean },
-            OperationMapping { command: "yum clean all".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("yum clean all", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Yum, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "yum autoremove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("yum autoremove", true),
         );
 
         // ============================================================
@@ -229,39 +289,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Install },
-            OperationMapping { command: "dnf install".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("dnf install", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Remove },
-            OperationMapping { command: "dnf remove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("dnf remove", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Update },
-            OperationMapping { command: "dnf check-update".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("dnf check-update", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Upgrade },
-            OperationMapping { command: "dnf upgrade".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("dnf upgrade", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Search },
-            OperationMapping { command: "dnf search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("dnf search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Info },
-            OperationMapping { command: "dnf info".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("dnf info", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::List },
-            OperationMapping { command: "dnf list installed".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("dnf list installed", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::Clean },
-            OperationMapping { command: "dnf clean all".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("dnf clean all", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Dnf, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "dnf autoremove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("dnf autoremove", true),
         );
 
         // ============================================================
@@ -269,39 +329,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Install },
-            OperationMapping { command: "pacman -S".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("pacman -S", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Remove },
-            OperationMapping { command: "pacman -R".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("pacman -R", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Update },
-            OperationMapping { command: "pacman -Sy".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("pacman -Sy", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Upgrade },
-            OperationMapping { command: "pacman -Syu".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("pacman -Syu", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Search },
-            OperationMapping { command: "pacman -Ss".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("pacman -Ss", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Info },
-            OperationMapping { command: "pacman -Si".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("pacman -Si", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::List },
-            OperationMapping { command: "pacman -Q".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("pacman -Q", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::Clean },
-            OperationMapping { command: "pacman -Sc".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("pacman -Sc", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Pacman, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "pacman -Rs".to_string(), requires_sudo: true, notes: Some("Removes package with unused dependencies".to_string()) },
+            OperationMapping::new("pacman -Rs", true).with_notes("Removes package with unused dependencies"),
         );
 
         // ============================================================
@@ -309,39 +369,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Install },
-            OperationMapping { command: "zypper install".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("zypper install", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Remove },
-            OperationMapping { command: "zypper remove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("zypper remove", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Update },
-            OperationMapping { command: "zypper refresh".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("zypper refresh", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Upgrade },
-            OperationMapping { command: "zypper update".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("zypper update", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Search },
-            OperationMapping { command: "zypper search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("zypper search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Info },
-            OperationMapping { command: "zypper info".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("zypper info", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::List },
-            OperationMapping { command: "zypper search --installed-only".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("zypper search --installed-only", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::Clean },
-            OperationMapping { command: "zypper clean".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("zypper clean", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Zypper, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "zypper remove --clean-deps".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("zypper remove --clean-deps", true),
         );
 
         // ============================================================
@@ -349,39 +409,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Install },
-            OperationMapping { command: "apk add".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apk add", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Remove },
-            OperationMapping { command: "apk del".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apk del", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Update },
-            OperationMapping { command: "apk update".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apk update", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Upgrade },
-            OperationMapping { command: "apk upgrade".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apk upgrade", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Search },
-            OperationMapping { command: "apk search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("apk search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Info },
-            OperationMapping { command: "apk info".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("apk info", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::List },
-            OperationMapping { command: "apk list --installed".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("apk list --installed", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::Clean },
-            OperationMapping { command: "apk cache clean".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("apk cache clean", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Apk, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "apk del".to_string(), requires_sudo: true, notes: Some("Use with package name and dependencies".to_string()) },
+            OperationMapping::new("apk del", true).with_notes("Use with package name and dependencies"),
         );
 
         // ============================================================
@@ -389,39 +449,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Install },
-            OperationMapping { command: "emerge".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("emerge", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Remove },
-            OperationMapping { command: "emerge --unmerge".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("emerge --unmerge", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Update },
-            OperationMapping { command: "emerge --sync".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("emerge --sync", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Upgrade },
-            OperationMapping { command: "emerge --update --deep --with-bdeps=y @world".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("emerge --update --deep --with-bdeps=y @world", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Search },
-            OperationMapping { command: "emerge --search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("emerge --search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Info },
-            OperationMapping { command: "emerge --info".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("emerge --info", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::List },
-            OperationMapping { command: "qlist -I".to_string(), requires_sudo: false, notes: Some("Requires portage-utils".to_string()) },
+            OperationMapping::new("qlist -I", false).with_notes("Requires portage-utils"),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::Clean },
-            OperationMapping { command: "emerge --depclean".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("emerge --depclean", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Emerge, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "emerge --depclean".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("emerge --depclean", true),
         );
 
         // ============================================================
@@ -429,39 +489,39 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Install },
-            OperationMapping { command: "xbps-install".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("xbps-install", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Remove },
-            OperationMapping { command: "xbps-remove".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("xbps-remove", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Update },
-            OperationMapping { command: "xbps-install -S".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("xbps-install -S", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Upgrade },
-            OperationMapping { command: "xbps-install -Su".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("xbps-install -Su", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Search },
-            OperationMapping { command: "xbps-query -Rs".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("xbps-query -Rs", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Info },
-            OperationMapping { command: "xbps-query -R".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("xbps-query -R", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::List },
-            OperationMapping { command: "xbps-query -l".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("xbps-query -l", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::Clean },
-            OperationMapping { command: "xbps-remove -O".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("xbps-remove -O", true),
         );
         m.insert(
             OperationKey { pm: PackageManager::Xbps, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "xbps-remove -o".to_string(), requires_sudo: true, notes: None },
+            OperationMapping::new("xbps-remove -o", true),
         );
 
         // ============================================================
@@ -469,40 +529,269 @@ lazy_static! {
         // ============================================================
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Install },
-            OperationMapping { command: "nix-env -i".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-env -i", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Remove },
-            OperationMapping { command: "nix-env -e".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-env -e", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Update },
-            OperationMapping { command: "nix-channel --update".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-channel --update", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Upgrade },
-            OperationMapping { command: "nix-env -u".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-env -u", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Search },
-            OperationMapping { command: "nix search".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix search", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Info },
-            OperationMapping { command: "nix-env -qa --description".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-env -qa --description", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::List },
-            OperationMapping { command: "nix-env -q".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-env -q", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::Clean },
-            OperationMapping { command: "nix-collect-garbage".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-collect-garbage", false),
         );
         m.insert(
             OperationKey { pm: PackageManager::Nix, op: PackageOperation::AutoRemove },
-            OperationMapping { command: "nix-collect-garbage -d".to_string(), requires_sudo: false, notes: None },
+            OperationMapping::new("nix-collect-garbage -d", false),
         );
+
+        m
+    };
+
+    /// Global flag mappings between package managers for different operations
+    static ref FLAG_MAPPINGS: HashMap<FlagMappingKey, Vec<PackageFlagMapping>> = {
+        let mut m = HashMap::new();
+
+        // ============================================================
+        // APT to other package managers - Install operation flags
+        // ============================================================
+        
+        // APT -> DNF (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Dnf, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes to all prompts"),
+                PackageFlagMapping::with_description("--yes", "-y", "Assume yes to all prompts"),
+                PackageFlagMapping::with_description("--assume-yes", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--no-install-recommends", "--setopt=install_weak_deps=False", "Don't install weak dependencies"),
+                PackageFlagMapping::with_description("--reinstall", "--reinstall", "Reinstall package"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet mode"),
+                PackageFlagMapping::with_description("--quiet", "--quiet", "Quiet mode"),
+            ],
+        );
+
+        // APT -> YUM (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Yum, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--yes", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--assume-yes", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--reinstall", "reinstall", "Reinstall package"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet mode"),
+                PackageFlagMapping::with_description("--quiet", "--quiet", "Quiet mode"),
+            ],
+        );
+
+        // APT -> Pacman (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Pacman, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--yes", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--assume-yes", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--no-install-recommends", "--asdeps", "Install as dependencies"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+                PackageFlagMapping::with_description("--quiet", "--quiet", "Quiet"),
+            ],
+        );
+
+        // APT -> Zypper (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Zypper, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--yes", "--no-confirm", "No confirmation"),
+                PackageFlagMapping::with_description("--assume-yes", "--non-interactive", "Non-interactive"),
+                PackageFlagMapping::with_description("--reinstall", "--force", "Force reinstall"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+            ],
+        );
+
+        // ============================================================
+        // DNF/YUM to other package managers - Install operation flags
+        // ============================================================
+
+        // DNF -> APT (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Dnf, to_pm: PackageManager::Apt, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--assumeyes", "--assume-yes", "Assume yes"),
+                PackageFlagMapping::with_description("--reinstall", "--reinstall", "Reinstall"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+                PackageFlagMapping::with_description("--quiet", "--quiet", "Quiet"),
+            ],
+        );
+
+        // YUM -> APT (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Yum, to_pm: PackageManager::Apt, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--assumeyes", "--assume-yes", "Assume yes"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+                PackageFlagMapping::with_description("--quiet", "--quiet", "Quiet"),
+            ],
+        );
+
+        // DNF -> Pacman (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Dnf, to_pm: PackageManager::Pacman, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("-y", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--assumeyes", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+            ],
+        );
+
+        // ============================================================
+        // Pacman to other package managers - Install operation flags
+        // ============================================================
+
+        // Pacman -> APT (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Pacman, to_pm: PackageManager::Apt, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("--noconfirm", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--asdeps", "", "Install as dependency (no direct equivalent)"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+                PackageFlagMapping::with_description("--quiet", "--quiet", "Quiet"),
+            ],
+        );
+
+        // Pacman -> DNF (Install)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Pacman, to_pm: PackageManager::Dnf, op: PackageOperation::Install },
+            vec![
+                PackageFlagMapping::with_description("--noconfirm", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+            ],
+        );
+
+        // ============================================================
+        // Remove operation flags
+        // ============================================================
+
+        // APT -> DNF (Remove)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Dnf, op: PackageOperation::Remove },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--yes", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--purge", "", "Purge config files (no direct equivalent)"),
+                PackageFlagMapping::with_description("--auto-remove", "--noautoremove", "Don't auto-remove dependencies"),
+            ],
+        );
+
+        // APT -> Pacman (Remove)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Pacman, op: PackageOperation::Remove },
+            vec![
+                PackageFlagMapping::with_description("-y", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--yes", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--purge", "-n", "Remove config files"),
+            ],
+        );
+
+        // Pacman -> APT (Remove)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Pacman, to_pm: PackageManager::Apt, op: PackageOperation::Remove },
+            vec![
+                PackageFlagMapping::with_description("--noconfirm", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("-n", "--purge", "Remove config files"),
+                PackageFlagMapping::with_description("-s", "--auto-remove", "Remove unused dependencies"),
+            ],
+        );
+
+        // ============================================================
+        // Update/Upgrade operation flags
+        // ============================================================
+
+        // APT -> DNF (Upgrade)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Dnf, op: PackageOperation::Upgrade },
+            vec![
+                PackageFlagMapping::with_description("-y", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("--yes", "-y", "Assume yes"),
+                PackageFlagMapping::with_description("-q", "-q", "Quiet"),
+            ],
+        );
+
+        // APT -> Pacman (Upgrade)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Pacman, op: PackageOperation::Upgrade },
+            vec![
+                PackageFlagMapping::with_description("-y", "--noconfirm", "No confirmation"),
+                PackageFlagMapping::with_description("--yes", "--noconfirm", "No confirmation"),
+            ],
+        );
+
+        // Pacman -> APT (Upgrade)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Pacman, to_pm: PackageManager::Apt, op: PackageOperation::Upgrade },
+            vec![
+                PackageFlagMapping::with_description("--noconfirm", "-y", "Assume yes"),
+            ],
+        );
+
+        // ============================================================
+        // Search operation flags
+        // ============================================================
+
+        // APT -> DNF (Search)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Dnf, op: PackageOperation::Search },
+            vec![
+                PackageFlagMapping::with_description("-n", "", "Search names only (different in DNF)"),
+                PackageFlagMapping::with_description("--names-only", "", "Search names only"),
+            ],
+        );
+
+        // APT -> Pacman (Search)
+        m.insert(
+            FlagMappingKey { from_pm: PackageManager::Apt, to_pm: PackageManager::Pacman, op: PackageOperation::Search },
+            vec![
+                PackageFlagMapping::with_description("-n", "", "Search names only"),
+                PackageFlagMapping::with_description("--names-only", "", "Search names only"),
+            ],
+        );
+
+        // ============================================================
+        // Cross-compatible flags (work similarly across package managers)
+        // ============================================================
+
+        // Verbose flags
+        for from_pm in [PackageManager::Apt, PackageManager::Dnf, PackageManager::Yum, PackageManager::Zypper] {
+            for to_pm in [PackageManager::Apt, PackageManager::Dnf, PackageManager::Yum, PackageManager::Zypper] {
+                if from_pm != to_pm {
+                    for op in [PackageOperation::Install, PackageOperation::Remove, PackageOperation::Upgrade] {
+                        m.entry(FlagMappingKey { from_pm, to_pm, op })
+                            .or_insert_with(Vec::new)
+                            .push(PackageFlagMapping::with_description("-v", "-v", "Verbose output"));
+                    }
+                }
+            }
+        }
 
         m
     };
@@ -670,6 +959,73 @@ fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperati
     }
 }
 
+/// Translate flags from source package manager to target package manager
+fn translate_flags(
+    flags: &[String],
+    from_pm: PackageManager,
+    to_pm: PackageManager,
+    operation: PackageOperation,
+    result: &mut PackageTranslationResult,
+) -> Vec<String> {
+    let mut translated_flags = Vec::new();
+    
+    // Get flag mappings for this operation
+    let flag_key = FlagMappingKey { from_pm, to_pm, op: operation };
+    let flag_mappings = FLAG_MAPPINGS.get(&flag_key);
+    
+    for flag in flags {
+        let mut found = false;
+        
+        if let Some(mappings) = flag_mappings {
+            // Check if this flag has a translation
+            for mapping in mappings {
+                // Handle exact match
+                if flag == &mapping.source || flag.to_lowercase() == mapping.source.to_lowercase() {
+                    if !mapping.target.is_empty() {
+                        // Handle cases where target contains multiple flags
+                        for part in mapping.target.split_whitespace() {
+                            if !part.is_empty() {
+                                translated_flags.push(part.to_string());
+                            }
+                        }
+                    }
+                    found = true;
+                    break;
+                }
+                
+                // Handle flags with values (e.g., --option=value)
+                if flag.starts_with(&mapping.source) && flag.contains('=') {
+                    let parts: Vec<&str> = flag.splitn(2, '=').collect();
+                    if parts[0] == mapping.source {
+                        if !mapping.target.is_empty() {
+                            if mapping.target.contains('=') {
+                                translated_flags.push(format!("{}={}", mapping.target, parts[1]));
+                            } else {
+                                translated_flags.push(mapping.target.clone());
+                                translated_flags.push(parts[1].to_string());
+                            }
+                        }
+                        found = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // If flag wasn't found in mappings, add a warning but keep it
+        if !found {
+            result.warnings.push(format!(
+                "Flag '{}' has no direct equivalent in {} for {} operation",
+                flag, to_pm, operation
+            ));
+            // Keep the original flag - it might still work or be ignored
+            translated_flags.push(flag.clone());
+        }
+    }
+    
+    translated_flags
+}
+
 /// Translate a package manager command from one package manager to another
 ///
 /// # Arguments
@@ -712,7 +1068,7 @@ pub fn translate_package_command(
     }
 
     // Parse the command
-    let (detected_pm, operation, mut args) = parse_package_command(trimmed)?;
+    let (detected_pm, operation, args) = parse_package_command(trimmed)?;
 
     // Get the target operation mapping
     let key = OperationKey { pm: to_pm, op: operation };
@@ -745,13 +1101,23 @@ pub fn translate_package_command(
 
     command.push_str(&mapping.command);
 
-    // Add arguments (package names, etc.)
-    // Filter out flags that are PM-specific
-    args.retain(|arg| !arg.starts_with('-') && !arg.starts_with('/'));
+    // Separate flags from package names
+    let (flags, packages): (Vec<String>, Vec<String>) = args.into_iter()
+        .partition(|arg| arg.starts_with('-') || arg.starts_with('/'));
     
-    if !args.is_empty() {
+    // Translate flags
+    let translated_flags = translate_flags(&flags, from_pm, to_pm, operation, &mut result);
+    
+    // Add translated flags
+    if !translated_flags.is_empty() {
         command.push(' ');
-        command.push_str(&args.join(" "));
+        command.push_str(&translated_flags.join(" "));
+    }
+    
+    // Add package names
+    if !packages.is_empty() {
+        command.push(' ');
+        command.push_str(&packages.join(" "));
     }
 
     result.command = command;
@@ -860,5 +1226,112 @@ mod tests {
         let r = result.unwrap();
         assert!(r.command.contains("apk add"));
         assert!(r.command.contains("nginx"));
+    }
+
+    // ============================================================
+    // Flag translation tests
+    // ============================================================
+
+    #[test]
+    fn test_apt_to_dnf_with_yes_flag() {
+        let result = translate_package_command("apt install -y vim", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("dnf install"));
+        assert!(r.command.contains("-y"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_apt_to_pacman_with_yes_flag() {
+        let result = translate_package_command("apt install -y vim", PackageManager::Apt, PackageManager::Pacman);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("pacman -S"));
+        assert!(r.command.contains("--noconfirm"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_apt_to_dnf_with_quiet_flag() {
+        let result = translate_package_command("apt install -q vim", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("dnf install"));
+        assert!(r.command.contains("-q"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_pacman_to_apt_with_noconfirm_flag() {
+        let result = translate_package_command("pacman -S --noconfirm vim", PackageManager::Pacman, PackageManager::Apt);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("apt install"));
+        assert!(r.command.contains("-y"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_dnf_to_apt_with_assumeyes_flag() {
+        let result = translate_package_command("dnf install -y vim", PackageManager::Dnf, PackageManager::Apt);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("apt install"));
+        assert!(r.command.contains("-y"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_apt_remove_with_purge_flag_to_pacman() {
+        let result = translate_package_command("apt remove --purge vim", PackageManager::Apt, PackageManager::Pacman);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("pacman -R"));
+        assert!(r.command.contains("-n")); // --purge translates to -n in pacman
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_apt_to_zypper_with_yes_flag() {
+        let result = translate_package_command("apt install -y vim", PackageManager::Apt, PackageManager::Zypper);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("zypper install"));
+        assert!(r.command.contains("-y"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_multiple_flags_translation() {
+        let result = translate_package_command("apt install -y -q vim", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.contains("dnf install"));
+        assert!(r.command.contains("-y"));
+        assert!(r.command.contains("-q"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_sudo_with_flags() {
+        let result = translate_package_command("sudo apt install -y vim", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        assert!(r.command.starts_with("sudo"));
+        assert!(r.command.contains("dnf install"));
+        assert!(r.command.contains("-y"));
+        assert!(r.command.contains("vim"));
+    }
+
+    #[test]
+    fn test_unmapped_flag_warning() {
+        let result = translate_package_command("apt install --some-unknown-flag vim", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_ok());
+        let r = result.unwrap();
+        // Should still translate the command and package, but warn about the flag
+        assert!(r.command.contains("dnf install"));
+        assert!(r.command.contains("vim"));
+        assert!(!r.warnings.is_empty()); // Should have a warning about the unmapped flag
     }
 }
