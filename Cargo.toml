@@ -17,7 +17,11 @@ serde_json = "1.0"
 [lib]
 name = "cmdx"
 path = "src/lib.rs"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "cmdx"
+path = "src/main.rs"
 [profile.release]
 opt-level = 3
 lto = true

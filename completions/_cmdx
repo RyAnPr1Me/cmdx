@@ -1,0 +1,51 @@
+#compdef cmdx
+
+# Zsh completion for cmdx
+# Copy to a directory in your $fpath (e.g., /usr/local/share/zsh/site-functions/)
+# Or source this file
+
+_cmdx() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :->command_or_file' \
+        '*::arg:->args' \
+        '(- *)'{-h,--help}'[Show help message]' \
+        '(- *)--version[Show version information]' \
+        '--from[Source OS]:os:(windows linux macos freebsd)' \
+        '--to[Target OS]:os:(windows linux macos freebsd)' \
+        {-n,--dry-run}'[Preview translations without executing]' \
+        {-q,--quiet}'[Suppress informational output]' \
+        {-v,--verbose}'[Show detailed translation information]' \
+        '--no-color[Disable colored output]'
+
+    case $state in
+        command_or_file)
+            local commands
+            commands=(
+                'exec:Execute a command with translation'
+                'shell:Start interactive translation shell'
+                'translate:Translate and print command without executing'
+            )
+            _describe -t commands 'cmdx commands' commands
+            _files -g '*.{bat,cmd,ps1,sh,bash,zsh}(-.)'
+            ;;
+        args)
+            case $line[1] in
+                exec|translate)
+                    # For exec and translate, suggest options
+                    _arguments \
+                        '--from[Source OS]:os:(windows linux macos freebsd)' \
+                        '--to[Target OS]:os:(windows linux macos freebsd)'
+                    ;;
+                shell)
+                    _arguments \
+                        '--from[Source OS]:os:(windows linux macos freebsd)'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_cmdx "$@"
