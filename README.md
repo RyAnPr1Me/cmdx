@@ -32,6 +32,20 @@ A high-performance cross-platform command and path translator library and CLI to
 cargo install cmdx
 ```
 
+**Optional: Enable shell completions**
+
+For Bash:
+```bash
+source completions/cmdx.bash
+```
+
+For Zsh:
+```zsh
+source completions/_cmdx
+```
+
+See [completions/README.md](completions/README.md) for detailed installation instructions.
+
 ### As a library in your project:
 
 ```toml
@@ -142,9 +156,38 @@ COMMANDS:
 OPTIONS:
     --from <os>             Source OS (windows, linux, macos)
     --to <os>               Target OS (default: auto-detect)
+    -n, --dry-run           Preview translations without executing
+    -q, --quiet             Suppress informational output
+    -v, --verbose           Show detailed translation information
+    --no-color              Disable colored output
     -h, --help              Print help message
-    -v, --version           Print version information
+    --version               Print version information
 ```
+
+### Advanced Features
+
+**Dry-run mode**: Preview what will be translated and executed without actually running commands:
+```bash
+cmdx --dry-run install.bat
+```
+
+**Quiet mode**: Suppress informational messages for use in scripts:
+```bash
+cmdx --quiet setup.sh
+```
+
+**Verbose mode**: Show detailed information including skipped comments:
+```bash
+cmdx --verbose deploy.ps1
+```
+
+**Color output**: Enabled by default with helpful color coding:
+- 🟢 Green: Translated commands
+- 🟡 Yellow: Warnings
+- 🔴 Red: Errors
+- 🔵 Cyan: Informational messages
+
+Disable with `--no-color` or set `NO_COLOR` environment variable.
 
 ## Library Usage
 
