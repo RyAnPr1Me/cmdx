@@ -5,6 +5,7 @@ A high-performance cross-platform command and path translator library for Rust. 
 ## Features
 
 - **Command Translation**: Translate shell commands between Windows, Linux, macOS, BSD, and more
+- **Package Manager Translation**: Translate package manager commands between Linux distros (apt, yum, dnf, pacman, zypper, etc.)
 - **Full Translation**: Translate commands AND their file path arguments in one call
 - **Smart Passthrough**: Commands already in the target OS format are passed through unchanged
 - **Flag Translation**: Automatically translates command flags/options (e.g., `dir /w` → `ls -C`)
@@ -26,6 +27,35 @@ cmdx = "0.1"
 ```
 
 ## Usage
+
+### Package Manager Translation (NEW!)
+
+Translate package manager commands between different Linux distributions:
+
+```rust
+use cmdx::{translate_package_command, PackageManager};
+
+// Translate apt to dnf
+let result = translate_package_command("apt install vim", PackageManager::Apt, PackageManager::Dnf)?;
+println!("{}", result.command);  // "dnf install vim"
+
+// Translate yum to pacman
+let result = translate_package_command("yum remove httpd", PackageManager::Yum, PackageManager::Pacman)?;
+println!("{}", result.command);  // "pacman -R httpd"
+
+// Translate apt to zypper
+let result = translate_package_command("apt update", PackageManager::Apt, PackageManager::Zypper)?;
+println!("{}", result.command);  // "zypper refresh"
+
+// Auto-detect source package manager
+use cmdx::translate_package_command_auto;
+let result = translate_package_command_auto("apt search nginx", PackageManager::Dnf)?;
+println!("{}", result.command);  // "dnf search nginx"
+
+// Works with sudo prefix
+let result = translate_package_command("sudo apt install vim", PackageManager::Apt, PackageManager::Pacman)?;
+println!("{}", result.command);  // "sudo pacman -S vim"
+```
 
 ### Full Command + Path Translation
 
@@ -217,6 +247,30 @@ fn process_input(input: &str, target_os: Os) -> String {
 ```
 
 ## Supported Commands
+
+### Package Manager Operations (Linux Distros)
+
+All major Linux package managers are supported with translation for common operations:
+
+| Operation | APT (Debian/Ubuntu) | YUM (RHEL/CentOS) | DNF (Fedora) | Pacman (Arch) | Zypper (openSUSE) |
+|-----------|---------------------|-------------------|--------------|---------------|-------------------|
+| **Install** | `apt install` | `yum install` | `dnf install` | `pacman -S` | `zypper install` |
+| **Remove** | `apt remove` | `yum remove` | `dnf remove` | `pacman -R` | `zypper remove` |
+| **Update** | `apt update` | `yum check-update` | `dnf check-update` | `pacman -Sy` | `zypper refresh` |
+| **Upgrade** | `apt upgrade` | `yum update` | `dnf upgrade` | `pacman -Syu` | `zypper update` |
+| **Search** | `apt search` | `yum search` | `dnf search` | `pacman -Ss` | `zypper search` |
+| **Info** | `apt show` | `yum info` | `dnf info` | `pacman -Si` | `zypper info` |
+| **List** | `apt list --installed` | `yum list installed` | `dnf list installed` | `pacman -Q` | `zypper packages` |
+| **Clean** | `apt clean` | `yum clean all` | `dnf clean all` | `pacman -Sc` | `zypper clean` |
+| **Auto-remove** | `apt autoremove` | `yum autoremove` | `dnf autoremove` | `pacman -Rs` | `zypper remove --clean-deps` |
+
+Additional supported package managers:
+- **APK** (Alpine Linux): `apk add`, `apk del`, `apk update`, etc.
+- **Emerge** (Gentoo): `emerge`, `emerge --unmerge`, `emerge --sync`, etc.
+- **XBPS** (Void Linux): `xbps-install`, `xbps-remove`, `xbps-query`, etc.
+- **Nix** (NixOS): `nix-env -i`, `nix-env -e`, `nix-env -u`, etc.
+
+### OS-Level Commands
 
 ### Windows → Linux
 
