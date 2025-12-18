@@ -17,6 +17,26 @@ const EXIT_USAGE_ERROR: i32 = 1;
 const EXIT_TRANSLATION_ERROR: i32 = 2;
 const EXIT_EXECUTION_ERROR: i32 = 3;
 
+/// CLI configuration flags
+#[derive(Debug, Clone)]
+struct CliConfig {
+    verbose: bool,
+    quiet: bool,
+    dry_run: bool,
+    no_color: bool,
+}
+
+impl Default for CliConfig {
+    fn default() -> Self {
+        Self {
+            verbose: false,
+            quiet: false,
+            dry_run: false,
+            no_color: false,
+        }
+    }
+}
+
 /// Main entry point for the cmdx CLI
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -39,24 +59,39 @@ fn main() {
         _ => {}
     }
 
-    // Check if the first argument is a file path (Proton-style usage)
-    let first_arg = &args[1];
-    if !first_arg.starts_with("--") && !matches!(first_arg.as_str(), "exec" | "shell" | "translate") {
-        // This is a script path - auto-detect and run
-        let script_path = first_arg;
-        let to_os = detect_os();
-        
-        // Auto-detect source OS from file extension
-        let from_os = detect_os_from_script(script_path);
-        
-        match run_script(script_path, from_os, to_os) {
-            Ok(code) => std::process::exit(code),
-            Err(e) => {
-                eprintln!("Script execution error: {}", e);
-                std::process::exit(EXIT_EXECUTION_ERROR);
+    // Parse CLI configuration
+    let config = parse_cli_config(&args);
+    
+    // Find the script path or command (skip flags)
+    let mut script_or_cmd: Option<String> = None;
+    for arg in &args[1..] {
+        if !arg.starts_with("--") && !arg.starts_with("-") && !matches!(arg.as_str(), "exec" | "shell" | "translate") {
+            script_or_cmd = Some(arg.clone());
+            break;
+        }
+    }
+    
+    // Check if we have a script path (Proton-style usage)
+    if let Some(script_path) = script_or_cmd {
+        if !matches!(script_path.as_str(), "exec" | "shell" | "translate") {
+            // This is a script path - auto-detect and run
+            let to_os = detect_os();
+            
+            // Auto-detect source OS from file extension
+            let from_os = detect_os_from_script(&script_path, &config);
+            
+            match run_script_with_config(&script_path, from_os, to_os, &config) {
+                Ok(code) => std::process::exit(code),
+                Err(e) => {
+                    eprintln!("{}", colorize(&format!("Script execution error: {}", e), colors::RED, &config));
+                    std::process::exit(EXIT_EXECUTION_ERROR);
+                }
             }
         }
     }
+    
+    // Otherwise handle traditional subcommands
+    let first_arg = &args[1];
 
     // Otherwise, handle traditional subcommand style
     match args[1].as_str() {
@@ -124,7 +159,7 @@ fn main() {
 }
 
 /// Detect source OS from script file extension or shebang
-fn detect_os_from_script(script_path: &str) -> Os {
+fn detect_os_from_script(script_path: &str, config: &CliConfig) -> Os {
     let path = Path::new(script_path);
     
     // First, try to detect from file extension
@@ -132,11 +167,23 @@ fn detect_os_from_script(script_path: &str) -> Os {
         let ext_str = ext.to_string_lossy().to_lowercase();
         match ext_str.as_str() {
             "bat" | "cmd" | "ps1" => {
-                eprintln!("[cmdx] Detected Windows script from extension: .{}", ext_str);
+                if !config.quiet {
+                    eprintln!("{}", colorize(
+                        &format!("[cmdx] Detected Windows script from extension: .{}", ext_str),
+                        colors::CYAN,
+                        config
+                    ));
+                }
                 return Os::Windows;
             }
             "sh" | "bash" | "zsh" => {
-                eprintln!("[cmdx] Detected Linux/Unix script from extension: .{}", ext_str);
+                if !config.quiet {
+                    eprintln!("{}", colorize(
+                        &format!("[cmdx] Detected Linux/Unix script from extension: .{}", ext_str),
+                        colors::CYAN,
+                        config
+                    ));
+                }
                 return Os::Linux;
             }
             _ => {}
@@ -147,26 +194,71 @@ fn detect_os_from_script(script_path: &str) -> Os {
     if let Ok(content) = fs::read_to_string(path) {
         let first_line = content.lines().next().unwrap_or("");
         if first_line.starts_with("#!") {
-            eprintln!("[cmdx] Detected Linux/Unix script from shebang: {}", first_line);
+            if !config.quiet {
+                eprintln!("{}", colorize(
+                    &format!("[cmdx] Detected Linux/Unix script from shebang: {}", first_line),
+                    colors::CYAN,
+                    config
+                ));
+            }
             return Os::Linux;
         }
         
         // Check for Windows batch markers
         if first_line.starts_with("@echo off") || first_line.starts_with("REM ") {
-            eprintln!("[cmdx] Detected Windows batch script from content");
+            if !config.quiet {
+                eprintln!("{}", colorize("[cmdx] Detected Windows batch script from content", colors::CYAN, config));
+            }
             return Os::Windows;
         }
     }
     
     // Default to current OS if can't detect
     let current = detect_os();
-    eprintln!("[cmdx] Could not detect script type, assuming {} script", current);
+    if !config.quiet {
+        eprintln!("{}", colorize(
+            &format!("[cmdx] Could not detect script type, assuming {} script", current),
+            colors::YELLOW,
+            config
+        ));
+    }
     current
 }
 
 /// Check if a flag exists in arguments
 fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
+}
+
+/// Parse CLI configuration from arguments
+fn parse_cli_config(args: &[String]) -> CliConfig {
+    CliConfig {
+        verbose: has_flag(args, "--verbose") || has_flag(args, "-v"),
+        quiet: has_flag(args, "--quiet") || has_flag(args, "-q"),
+        dry_run: has_flag(args, "--dry-run") || has_flag(args, "-n"),
+        no_color: has_flag(args, "--no-color") || env::var("NO_COLOR").is_ok(),
+    }
+}
+
+/// ANSI color codes
+mod colors {
+    pub const RESET: &str = "\x1b[0m";
+    pub const BOLD: &str = "\x1b[1m";
+    pub const DIM: &str = "\x1b[2m";
+    pub const GREEN: &str = "\x1b[32m";
+    pub const YELLOW: &str = "\x1b[33m";
+    pub const BLUE: &str = "\x1b[34m";
+    pub const CYAN: &str = "\x1b[36m";
+    pub const RED: &str = "\x1b[31m";
+}
+
+/// Colorize text if colors are enabled
+fn colorize(text: &str, color: &str, config: &CliConfig) -> String {
+    if config.no_color {
+        text.to_string()
+    } else {
+        format!("{}{}{}", color, text, colors::RESET)
+    }
 }
 
 /// Extract command from arguments, skipping flags
@@ -229,12 +321,19 @@ fn print_usage(prog: &str) {
     println!("OPTIONS:");
     println!("    --from <os>             Source OS (windows, linux, macos)");
     println!("    --to <os>               Target OS (default: auto-detect)");
+    println!("    -n, --dry-run           Preview translations without executing");
+    println!("    -q, --quiet             Suppress informational output");
+    println!("    -v, --verbose           Show detailed translation information");
+    println!("    --no-color              Disable colored output");
     println!("    -h, --help              Print this help message");
-    println!("    -v, --version           Print version information\n");
+    println!("    --version               Print version information\n");
     println!("EXAMPLES:");
     println!("    # Proton-style (easiest):");
     println!("    {} install.bat", prog);
     println!("    {} setup.sh", prog);
+    println!();
+    println!("    # Dry-run mode (preview only):");
+    println!("    {} --dry-run install.bat", prog);
     println!();
     println!("    # Advanced usage:");
     println!("    {} exec --from windows \"dir /s\"", prog);
@@ -381,8 +480,8 @@ fn execute_shell_command(command: &str) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// Run a script file with translation
-fn run_script(script_path: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn std::error::Error>> {
+/// Run a script file with translation (with config support)
+fn run_script_with_config(script_path: &str, from_os: Os, to_os: Os, config: &CliConfig) -> Result<i32, Box<dyn std::error::Error>> {
     let path = Path::new(script_path);
     
     if !path.exists() {
@@ -392,15 +491,31 @@ fn run_script(script_path: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn 
     let content = fs::read_to_string(path)?;
     let lines: Vec<&str> = content.lines().collect();
     
-    println!("Executing script: {} ({} lines)", script_path, lines.len());
-    println!("Translating from {} to {}\n", from_os, to_os);
+    if !config.quiet {
+        println!("{}", colorize(
+            &format!("Executing script: {} ({} lines)", script_path, lines.len()),
+            colors::BOLD,
+            config
+        ));
+        println!("{}", colorize(
+            &format!("Translating from {} to {}", from_os, to_os),
+            colors::BLUE,
+            config
+        ));
+        if config.dry_run {
+            println!("{}", colorize("[DRY RUN MODE - Commands will not be executed]", colors::YELLOW, config));
+        }
+        println!();
+    }
     
     let mut last_exit_code = EXIT_SUCCESS;
+    let mut commands_executed = 0;
+    let mut commands_skipped = 0;
     
     for (line_num, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
         
-        // Skip empty lines and comments
+        // Skip empty lines
         if trimmed.is_empty() {
             continue;
         }
@@ -420,43 +535,76 @@ fn run_script(script_path: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn 
         };
         
         if should_skip {
-            println!("[{}] {} [skipped]", line_num + 1, trimmed);
+            if config.verbose {
+                println!("{}", colorize(
+                    &format!("[{}] {} [skipped]", line_num + 1, trimmed),
+                    colors::DIM,
+                    config
+                ));
+            }
+            commands_skipped += 1;
             continue;
         }
         
         // Translate and execute the command
-        print!("[{}] {} → ", line_num + 1, trimmed);
-        io::stdout().flush()?;
+        if !config.quiet {
+            print!("[{}] {} {} ", 
+                line_num + 1, 
+                colorize(trimmed, colors::DIM, config),
+                colorize("→", colors::BLUE, config)
+            );
+            io::stdout().flush()?;
+        }
         
         match translate_full(trimmed, from_os, to_os) {
             Ok(result) => {
-                println!("{}", result.command);
+                if !config.quiet {
+                    println!("{}", colorize(&result.command, colors::GREEN, config));
+                }
                 
-                if !result.warnings.is_empty() {
+                if config.verbose && !result.warnings.is_empty() {
                     for warning in &result.warnings {
-                        eprintln!("     Warning: {}", warning);
+                        eprintln!("     {}", colorize(&format!("Warning: {}", warning), colors::YELLOW, config));
                     }
                 }
                 
-                // Execute the translated command
-                match execute_shell_command(&result.command) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("     Execution error: {}", e);
-                        last_exit_code = EXIT_EXECUTION_ERROR;
-                        // Continue executing remaining commands
+                // Execute the translated command (unless dry-run)
+                if !config.dry_run {
+                    match execute_shell_command(&result.command) {
+                        Ok(_) => {
+                            commands_executed += 1;
+                        }
+                        Err(e) => {
+                            eprintln!("     {}", colorize(&format!("Execution error: {}", e), colors::RED, config));
+                            last_exit_code = EXIT_EXECUTION_ERROR;
+                            // Continue executing remaining commands
+                        }
                     }
                 }
             }
             Err(e) => {
-                eprintln!("ERROR");
-                eprintln!("     Translation error: {}", e);
+                println!("{}", colorize("ERROR", colors::RED, config));
+                eprintln!("     {}", colorize(&format!("Translation error: {}", e), colors::RED, config));
                 last_exit_code = EXIT_TRANSLATION_ERROR;
                 // Continue executing remaining commands
             }
         }
     }
     
-    println!("\nScript execution completed");
+    if !config.quiet {
+        println!();
+        println!("{}", colorize(
+            &format!("Script execution completed: {} commands executed, {} skipped", 
+                commands_executed, commands_skipped),
+            colors::BOLD,
+            config
+        ));
+    }
+    
     Ok(last_exit_code)
+}
+
+/// Run a script file with translation (legacy function for compatibility)
+fn run_script(script_path: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn std::error::Error>> {
+    run_script_with_config(script_path, from_os, to_os, &CliConfig::default())
 }
