@@ -1,9 +1,16 @@
 # cmdx
 
-A high-performance cross-platform command and path translator library for Rust. Designed for integration into terminal emulators and cross-platform tools.
+A high-performance cross-platform command and path translator library and CLI tool for Rust. Works as a **translation layer for cross-OS script execution**, similar to WINE but for shell commands.
 
 ## Features
 
+### 🚀 CLI Translation Layer (NEW!)
+- **Script Execution**: Run Windows .bat/.cmd scripts on Linux (and vice versa) with automatic command translation
+- **Interactive Shell**: Real-time command translation shell
+- **Command Execution**: Execute translated commands directly
+- **Translation Preview**: See how commands will be translated before execution
+
+### 📚 Library Features
 - **Command Translation**: Translate shell commands between Windows, Linux, macOS, BSD, and more
 - **Package Manager Translation**: Translate package manager commands between Linux distros (apt, yum, dnf, pacman, zypper, etc.)
 - **Full Translation**: Translate commands AND their file path arguments in one call
@@ -19,14 +26,92 @@ A high-performance cross-platform command and path translator library for Rust. 
 
 ## Installation
 
-Add to your `Cargo.toml`:
+### As a CLI tool:
+
+```bash
+cargo install cmdx
+```
+
+### As a library in your project:
 
 ```toml
 [dependencies]
 cmdx = "0.1"
 ```
 
-## Usage
+## CLI Usage
+
+The `cmdx` command-line tool provides a translation layer for running cross-OS scripts and commands:
+
+### Execute a command with translation
+
+```bash
+# Run a Windows command on Linux
+cmdx exec --from windows "dir /s"
+
+# Run a Linux command on Windows  
+cmdx exec --from linux "ls -la"
+```
+
+### Run a script file with translation
+
+```bash
+# Execute a Windows batch script on Linux
+cmdx script --from windows install.bat
+
+# Execute a Linux shell script on Windows
+cmdx script --from linux setup.sh
+```
+
+### Interactive translation shell
+
+```bash
+# Start an interactive shell that translates Windows commands to Linux
+cmdx shell --from windows
+
+# In the shell:
+cmdx [Windows→Linux]> dir /s
+→ ls -R
+[directory listing output]
+
+cmdx [Windows→Linux]> type readme.txt
+→ cat readme.txt
+[file contents]
+```
+
+### Preview translation without execution
+
+```bash
+# See how a command would be translated
+cmdx translate --from windows --to linux "dir /s"
+# Output:
+# Original [Windows]: dir /s
+# Translated [Linux]: ls -R
+
+# Package manager translation
+cmdx translate --from linux --to linux "apt install -y vim"
+# Output:
+# Original [Linux]: apt install -y vim  
+# Translated [Linux]: apt install -y vim
+```
+
+### Command-line options
+
+```
+COMMANDS:
+    exec <command>           Execute a command with translation
+    shell                    Start interactive translation shell
+    script <file>            Execute a script file with translation
+    translate <command>      Translate and print command without executing
+
+OPTIONS:
+    --from <os>             Source OS (windows, linux, macos)
+    --to <os>               Target OS (default: auto-detect)
+    -h, --help              Print help message
+    -v, --version           Print version information
+```
+
+## Library Usage
 
 ### Package Manager Translation (NEW!)
 
