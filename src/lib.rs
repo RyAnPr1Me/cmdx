@@ -1,10 +1,31 @@
 // entry.rs or lib.rs
 
-mod engine;
+mod translator;
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use engine::{translate_full, Os};
+
+// Re-export main translator types and functions
+pub use translator::engine::{
+    translate_command, translate_full, translate_compound_command,
+    translate_batch, translate_script_extension, translate_shebang,
+    TranslationResult, TranslationError,
+};
+pub use translator::os::{Os, detect_os};
+pub use translator::path::{
+    translate_path, translate_path_auto, translate_paths,
+    is_windows_path, is_unix_path, PathTranslation,
+};
+pub use translator::env::translate_env_vars;
+pub use translator::command_map::{
+    is_native_command, get_mapping, get_available_commands,
+    CommandMapping, FlagMapping,
+};
+pub use translator::distro::{Distro, PackageManager};
+pub use translator::package_manager::{
+    translate_package_command, translate_package_command_auto,
+    PackageTranslationResult, PackageTranslationError, PackageOperation,
+};
 
 
 /// Translates a Windows command string to Linux using cmdx.
@@ -20,7 +41,12 @@ pub extern "C" fn preprocess_command(cmd: *const c_char) -> *mut c_char {
 
     // Perform translation; fallback to original if translation fails
     let result = translate_full(cmd_str, Os::Windows, Os::Linux)
-        .unwrap_or_else(|_| cmd_str.into());
+        .unwrap_or_else(|_| TranslationResult::new(
+            cmd_str.to_string(),
+            cmd_str.to_string(),
+            Os::Windows,
+            Os::Linux,
+        ));
 
     // Convert Rust String to C string
     let c_result = CString::new(result.command).unwrap_or_else(|_| CString::new("").unwrap());
