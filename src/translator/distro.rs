@@ -229,5 +229,95 @@ mod tests {
         assert_eq!(PackageManager::Apt.command_name(), "apt");
         assert_eq!(PackageManager::Dnf.command_name(), "dnf");
         assert_eq!(PackageManager::Pacman.command_name(), "pacman");
+        assert_eq!(PackageManager::Yum.command_name(), "yum");
+        assert_eq!(PackageManager::Zypper.command_name(), "zypper");
+        assert_eq!(PackageManager::Apk.command_name(), "apk");
+        assert_eq!(PackageManager::Emerge.command_name(), "emerge");
+        assert_eq!(PackageManager::Xbps.command_name(), "xbps-install");
+        assert_eq!(PackageManager::Nix.command_name(), "nix-env");
+    }
+
+    #[test]
+    fn test_distro_display() {
+        assert_eq!(format!("{}", Distro::Debian), "Debian");
+        assert_eq!(format!("{}", Distro::Ubuntu), "Ubuntu");
+        assert_eq!(format!("{}", Distro::Fedora), "Fedora");
+        assert_eq!(format!("{}", Distro::Arch), "Arch");
+        assert_eq!(format!("{}", Distro::Alpine), "Alpine");
+    }
+
+    #[test]
+    fn test_package_manager_display() {
+        assert_eq!(format!("{}", PackageManager::Apt), "apt");
+        assert_eq!(format!("{}", PackageManager::Dnf), "dnf");
+        assert_eq!(format!("{}", PackageManager::Pacman), "pacman");
+        assert_eq!(format!("{}", PackageManager::Zypper), "zypper");
+    }
+
+    #[test]
+    fn test_all_distros_parse() {
+        assert_eq!(Distro::parse("debian"), Some(Distro::Debian));
+        assert_eq!(Distro::parse("ubuntu"), Some(Distro::Ubuntu));
+        assert_eq!(Distro::parse("rhel"), Some(Distro::RHEL));
+        assert_eq!(Distro::parse("centos"), Some(Distro::CentOS));
+        assert_eq!(Distro::parse("fedora"), Some(Distro::Fedora));
+        assert_eq!(Distro::parse("arch"), Some(Distro::Arch));
+        assert_eq!(Distro::parse("manjaro"), Some(Distro::Manjaro));
+        assert_eq!(Distro::parse("opensuse"), Some(Distro::OpenSUSE));
+        assert_eq!(Distro::parse("alpine"), Some(Distro::Alpine));
+        assert_eq!(Distro::parse("gentoo"), Some(Distro::Gentoo));
+        assert_eq!(Distro::parse("void"), Some(Distro::Void));
+        assert_eq!(Distro::parse("nixos"), Some(Distro::NixOS));
+        assert_eq!(Distro::parse("invalid"), None);
+    }
+
+    #[test]
+    fn test_all_package_managers_parse() {
+        assert_eq!(PackageManager::parse("apt"), Some(PackageManager::Apt));
+        assert_eq!(PackageManager::parse("apt-get"), Some(PackageManager::Apt));
+        assert_eq!(PackageManager::parse("yum"), Some(PackageManager::Yum));
+        assert_eq!(PackageManager::parse("dnf"), Some(PackageManager::Dnf));
+        assert_eq!(PackageManager::parse("pacman"), Some(PackageManager::Pacman));
+        assert_eq!(PackageManager::parse("zypper"), Some(PackageManager::Zypper));
+        assert_eq!(PackageManager::parse("apk"), Some(PackageManager::Apk));
+        assert_eq!(PackageManager::parse("emerge"), Some(PackageManager::Emerge));
+        assert_eq!(PackageManager::parse("xbps"), Some(PackageManager::Xbps));
+        assert_eq!(PackageManager::parse("nix"), Some(PackageManager::Nix));
+        assert_eq!(PackageManager::parse("invalid"), None);
+    }
+
+    #[test]
+    fn test_parse_distro_error() {
+        let result = "invalid-distro".parse::<Distro>();
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(format!("{}", e).contains("Unknown distribution"));
+        }
+    }
+
+    #[test]
+    fn test_parse_package_manager_error() {
+        let result = "invalid-pm".parse::<PackageManager>();
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(format!("{}", e).contains("Unknown distribution"));
+        }
+    }
+
+    #[test]
+    fn test_all_distros_have_package_manager() {
+        assert_eq!(Distro::Debian.package_manager(), PackageManager::Apt);
+        assert_eq!(Distro::Ubuntu.package_manager(), PackageManager::Apt);
+        assert_eq!(Distro::RHEL.package_manager(), PackageManager::Yum);
+        assert_eq!(Distro::CentOS.package_manager(), PackageManager::Yum);
+        assert_eq!(Distro::Fedora.package_manager(), PackageManager::Dnf);
+        assert_eq!(Distro::Arch.package_manager(), PackageManager::Pacman);
+        assert_eq!(Distro::Manjaro.package_manager(), PackageManager::Pacman);
+        assert_eq!(Distro::OpenSUSE.package_manager(), PackageManager::Zypper);
+        assert_eq!(Distro::Alpine.package_manager(), PackageManager::Apk);
+        assert_eq!(Distro::Gentoo.package_manager(), PackageManager::Emerge);
+        assert_eq!(Distro::Void.package_manager(), PackageManager::Xbps);
+        assert_eq!(Distro::NixOS.package_manager(), PackageManager::Nix);
+        assert_eq!(Distro::Generic.package_manager(), PackageManager::Generic);
     }
 }

@@ -887,10 +887,11 @@ fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperati
             // -Ss (search), -Si/-Qi (info), -Q (query/list), -Sc (clean)
             if op_str.starts_with('-') {
                 match op_str.as_str() {
-                    "-s" | "-sy" => Ok(PackageOperation::Install),
-                    "-r" | "-rs" => Ok(PackageOperation::Remove),
-                    "-sy" if parts.len() == 1 => Ok(PackageOperation::Update),
                     "-syu" => Ok(PackageOperation::Upgrade),
+                    "-sy" => Ok(PackageOperation::Update),
+                    "-s" => Ok(PackageOperation::Install),
+                    "-rs" => Ok(PackageOperation::Remove),
+                    "-r" => Ok(PackageOperation::Remove),
                     "-ss" => Ok(PackageOperation::Search),
                     "-si" | "-qi" => Ok(PackageOperation::Info),
                     "-q" => Ok(PackageOperation::List),
@@ -936,14 +937,13 @@ fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperati
         PackageManager::Xbps => {
             // XBPS commands can vary (xbps-install, xbps-remove, xbps-query)
             match op_str.as_str() {
-                "-s" | "-su" => Ok(PackageOperation::Install),
-                "" => Ok(PackageOperation::Remove), // xbps-remove pkg
-                "-s" if parts.len() > 1 && parts[1] == "-S" => Ok(PackageOperation::Update),
                 "-su" => Ok(PackageOperation::Upgrade),
+                "-s" => Ok(PackageOperation::Install),
                 "-rs" => Ok(PackageOperation::Search),
                 "-r" => Ok(PackageOperation::Info),
                 "-l" => Ok(PackageOperation::List),
                 "-o" => Ok(PackageOperation::Clean),
+                "" => Ok(PackageOperation::Remove), // xbps-remove pkg
                 _ => Err(PackageTranslationError::UnsupportedOperation(op_str)),
             }
         },
@@ -1333,5 +1333,278 @@ mod tests {
         assert!(r.command.contains("dnf install"));
         assert!(r.command.contains("vim"));
         assert!(!r.warnings.is_empty()); // Should have a warning about the unmapped flag
+    }
+
+    // ============================================================
+    // Error case tests
+    // ============================================================
+
+    #[test]
+    fn test_empty_command_error() {
+        let result = translate_package_command("", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_err());
+        match result {
+            Err(PackageTranslationError::EmptyCommand) => {},
+            _ => panic!("Expected EmptyCommand error"),
+        }
+    }
+
+    #[test]
+    fn test_empty_command_auto_error() {
+        let result = translate_package_command_auto("", PackageManager::Dnf);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_package_manager_command() {
+        let result = translate_package_command("invalid-command install vim", PackageManager::Apt, PackageManager::Dnf);
+        assert!(result.is_err());
+        match result {
+            Err(PackageTranslationError::NotPackageManagerCommand(_)) => {},
+            _ => panic!("Expected NotPackageManagerCommand error"),
+        }
+    }
+
+    #[test]
+    fn test_unsupported_operation() {
+        // Pacman with invalid flag
+        let result = translate_package_command("pacman -X vim", PackageManager::Pacman, PackageManager::Apt);
+        assert!(result.is_err());
+    }
+
+    // ============================================================
+    // All operations coverage tests
+    // ============================================================
+
+    #[test]
+    fn test_all_operations_apt_to_dnf() {
+        // Install
+        let r = translate_package_command("apt install vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf install"));
+        
+        // Remove
+        let r = translate_package_command("apt remove vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf remove"));
+        
+        // Update
+        let r = translate_package_command("apt update", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf check-update"));
+        
+        // Upgrade
+        let r = translate_package_command("apt upgrade", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf upgrade"));
+        
+        // Search
+        let r = translate_package_command("apt search vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf search"));
+        
+        // Info
+        let r = translate_package_command("apt show vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf info"));
+        
+        // Clean
+        let r = translate_package_command("apt clean", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf clean"));
+        
+        // Autoremove
+        let r = translate_package_command("apt autoremove", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf autoremove"));
+    }
+
+    // ============================================================
+    // Package manager specific tests
+    // ============================================================
+
+    #[test]
+    fn test_apk_operations() {
+        // APK to Apt
+        let r = translate_package_command("apk add nginx", PackageManager::Apk, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        assert!(r.command.contains("nginx"));
+        
+        let r = translate_package_command("apk del nginx", PackageManager::Apk, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt remove"));
+        
+        let r = translate_package_command("apk update", PackageManager::Apk, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt update"));
+        
+        let r = translate_package_command("apk search nginx", PackageManager::Apk, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt search"));
+    }
+
+    #[test]
+    fn test_emerge_operations() {
+        // Emerge to Apt - emerge uses flags for operations
+        let r = translate_package_command("emerge -a vim", PackageManager::Emerge, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        
+        let r = translate_package_command("emerge --unmerge vim", PackageManager::Emerge, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt remove"));
+        
+        let r = translate_package_command("emerge --sync", PackageManager::Emerge, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt update"));
+        
+        let r = translate_package_command("emerge --search vim", PackageManager::Emerge, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt search"));
+    }
+
+    #[test]
+    fn test_xbps_operations() {
+        // XBPS to Apt
+        let r = translate_package_command("xbps-install -s vim", PackageManager::Xbps, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        
+        let r = translate_package_command("xbps-install -su", PackageManager::Xbps, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt upgrade"));
+        
+        let r = translate_package_command("xbps-query -rs vim", PackageManager::Xbps, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt search"));
+    }
+
+    #[test]
+    fn test_nix_operations() {
+        // Nix to Apt
+        let r = translate_package_command("nix-env -i vim", PackageManager::Nix, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        
+        let r = translate_package_command("nix-env -e vim", PackageManager::Nix, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt remove"));
+        
+        let r = translate_package_command("nix-env -u", PackageManager::Nix, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt upgrade"));
+    }
+
+    #[test]
+    fn test_zypper_operations() {
+        // Zypper to Apt - test all operations
+        let r = translate_package_command("zypper install vim", PackageManager::Zypper, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        
+        let r = translate_package_command("zypper remove vim", PackageManager::Zypper, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt remove"));
+        
+        let r = translate_package_command("zypper refresh", PackageManager::Zypper, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt update"));
+        
+        let r = translate_package_command("zypper update", PackageManager::Zypper, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt upgrade"));
+        
+        let r = translate_package_command("zypper search vim", PackageManager::Zypper, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt search"));
+        
+        let r = translate_package_command("zypper info vim", PackageManager::Zypper, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt show"));
+    }
+
+    #[test]
+    fn test_pacman_all_operations() {
+        // Test all Pacman operations
+        let r = translate_package_command("pacman -S vim", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        
+        let r = translate_package_command("pacman -R vim", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt remove"));
+        
+        let r = translate_package_command("pacman -Sy", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt update"));
+        
+        let r = translate_package_command("pacman -Syu", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt upgrade"));
+        
+        let r = translate_package_command("pacman -Ss vim", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt search"));
+        
+        let r = translate_package_command("pacman -Si vim", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt show"));
+        
+        let r = translate_package_command("pacman -Q", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt list"));
+        
+        let r = translate_package_command("pacman -Sc", PackageManager::Pacman, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt clean"));
+    }
+
+    #[test]
+    fn test_yum_all_operations() {
+        // Test all YUM operations
+        let r = translate_package_command("yum install vim", PackageManager::Yum, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt install"));
+        
+        let r = translate_package_command("yum remove vim", PackageManager::Yum, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt remove"));
+        
+        let r = translate_package_command("yum check-update", PackageManager::Yum, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt update"));
+        
+        let r = translate_package_command("yum update", PackageManager::Yum, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt upgrade"));
+        
+        let r = translate_package_command("yum search vim", PackageManager::Yum, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt search"));
+        
+        let r = translate_package_command("yum info vim", PackageManager::Yum, PackageManager::Apt).unwrap();
+        assert!(r.command.contains("apt show"));
+    }
+
+    // ============================================================
+    // Multiple packages tests
+    // ============================================================
+
+    #[test]
+    fn test_multiple_packages() {
+        let r = translate_package_command("apt install vim nginx git", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        assert!(r.command.contains("dnf install"));
+        assert!(r.command.contains("vim"));
+        assert!(r.command.contains("nginx"));
+        assert!(r.command.contains("git"));
+    }
+
+    #[test]
+    fn test_multiple_packages_with_flags() {
+        let r = translate_package_command("apt install -y -q vim nginx", PackageManager::Apt, PackageManager::Pacman).unwrap();
+        assert!(r.command.contains("pacman -S"));
+        assert!(r.command.contains("--noconfirm"));
+        assert!(r.command.contains("-q"));
+        assert!(r.command.contains("vim"));
+        assert!(r.command.contains("nginx"));
+    }
+
+    // ============================================================
+    // Display and serialization tests
+    // ============================================================
+
+    #[test]
+    fn test_translation_result_display() {
+        let r = translate_package_command("apt install vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+        let display = format!("{}", r);
+        assert!(display.contains("dnf install"));
+    }
+
+    #[test]
+    fn test_translation_error_display() {
+        let err = PackageTranslationError::EmptyCommand;
+        let display = format!("{}", err);
+        assert!(display.contains("Empty command"));
+        
+        let err = PackageTranslationError::NotPackageManagerCommand("test".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("Not a recognized"));
+        
+        let err = PackageTranslationError::UnsupportedOperation("unknown".to_string());
+        let display = format!("{}", err);
+        assert!(display.contains("not supported"));
+    }
+
+    #[test]
+    fn test_package_operation_display() {
+        assert_eq!(format!("{}", PackageOperation::Install), "install");
+        assert_eq!(format!("{}", PackageOperation::Remove), "remove");
+        assert_eq!(format!("{}", PackageOperation::Update), "update");
+        assert_eq!(format!("{}", PackageOperation::Upgrade), "upgrade");
+        assert_eq!(format!("{}", PackageOperation::Search), "search");
+        assert_eq!(format!("{}", PackageOperation::Info), "info");
+        assert_eq!(format!("{}", PackageOperation::List), "list");
+        assert_eq!(format!("{}", PackageOperation::Clean), "clean");
+        assert_eq!(format!("{}", PackageOperation::AutoRemove), "autoremove");
     }
 }

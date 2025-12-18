@@ -30,13 +30,20 @@ pub use translator::package_manager::{
 
 /// Translates a Windows command string to Linux using cmdx.
 /// Returns a newly allocated C string. Must be freed with free_string.
+/// 
+/// # Safety
+/// 
+/// This function is unsafe because it:
+/// - Dereferences a raw pointer (`cmd`)
+/// - The caller must ensure `cmd` is a valid null-terminated C string
+/// - The returned pointer must be freed by calling `free_string`
 #[no_mangle]
-pub extern "C" fn preprocess_command(cmd: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn preprocess_command(cmd: *const c_char) -> *mut c_char {
     if cmd.is_null() {
         return std::ptr::null_mut();
     }
 
-    let c_str = unsafe { CStr::from_ptr(cmd) };
+    let c_str = CStr::from_ptr(cmd);
     let cmd_str = c_str.to_str().unwrap_or("");
 
     // Perform translation; fallback to original if translation fails
@@ -54,13 +61,18 @@ pub extern "C" fn preprocess_command(cmd: *const c_char) -> *mut c_char {
 }
 
 /// Frees a C string previously allocated by preprocess_command.
+/// 
+/// # Safety
+/// 
+/// This function is unsafe because it:
+/// - Dereferences a raw pointer (`s`)
+/// - The caller must ensure `s` was allocated by `preprocess_command`
+/// - The pointer must not be used after calling this function
 #[no_mangle]
-pub extern "C" fn free_string(s: *mut c_char) {
+pub unsafe extern "C" fn free_string(s: *mut c_char) {
     if s.is_null() {
         return;
     }
-    unsafe {
-        // Reconstruct CString so it gets dropped and memory freed
-        CString::from_raw(s);
-    }
+    // Reconstruct CString so it gets dropped and memory freed
+    let _ = CString::from_raw(s);
 }
