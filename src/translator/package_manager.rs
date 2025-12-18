@@ -1607,4 +1607,62 @@ mod tests {
         assert_eq!(format!("{}", PackageOperation::Clean), "clean");
         assert_eq!(format!("{}", PackageOperation::AutoRemove), "autoremove");
     }
+
+    // ============================================================
+    // API and structure tests
+    // ============================================================
+
+    #[test]
+    fn test_package_flag_mapping_new() {
+        let mapping = PackageFlagMapping::new("-y", "--yes");
+        assert_eq!(mapping.source, "-y");
+        assert_eq!(mapping.target, "--yes");
+        assert!(mapping.description.is_none());
+    }
+
+    #[test]
+    fn test_package_flag_mapping_with_description() {
+        let mapping = PackageFlagMapping::with_description("-y", "--yes", "Assume yes");
+        assert_eq!(mapping.source, "-y");
+        assert_eq!(mapping.target, "--yes");
+        assert_eq!(mapping.description, Some("Assume yes".to_string()));
+    }
+
+    #[test]
+    fn test_translation_result_new() {
+        let result = PackageTranslationResult::new(
+            "dnf install vim".to_string(),
+            "apt install vim".to_string(),
+            PackageManager::Apt,
+            PackageManager::Dnf,
+        );
+        assert_eq!(result.command, "dnf install vim");
+        assert_eq!(result.original, "apt install vim");
+        assert_eq!(result.from_pm, PackageManager::Apt);
+        assert_eq!(result.to_pm, PackageManager::Dnf);
+        assert!(result.warnings.is_empty());
+        assert!(!result.requires_sudo);
+    }
+
+    #[test]
+    fn test_translation_result_with_warnings() {
+        let mut result = PackageTranslationResult::new(
+            "dnf install vim".to_string(),
+            "apt install vim".to_string(),
+            PackageManager::Apt,
+            PackageManager::Dnf,
+        );
+        result.warnings.push("Test warning".to_string());
+        result.requires_sudo = true;
+        
+        assert!(!result.warnings.is_empty());
+        assert!(result.requires_sudo);
+        assert_eq!(result.warnings[0], "Test warning");
+    }
+
+    #[test]
+    fn test_package_translation_error_is_error() {
+        let err = PackageTranslationError::EmptyCommand;
+        let _: &dyn std::error::Error = &err;  // Verify it implements Error trait
+    }
 }
