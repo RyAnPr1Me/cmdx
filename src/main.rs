@@ -27,6 +27,16 @@ struct CliConfig {
 }
 
 impl Default for CliConfig {
+    /// Creates a CliConfig with all flags disabled.
+    ///
+    /// All fields (`verbose`, `quiet`, `dry_run`, `no_color`) are set to `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cfg = CliConfig::default();
+    /// assert!(!cfg.verbose && !cfg.quiet && !cfg.dry_run && !cfg.no_color);
+    /// ```
     fn default() -> Self {
         Self {
             verbose: false,
@@ -37,7 +47,25 @@ impl Default for CliConfig {
     }
 }
 
-/// Main entry point for the cmdx CLI
+/// CLI entry point that parses command-line arguments and dispatches cmdx actions.
+///
+/// Parses flags and subcommands, auto-detects source/target OS when running a script,
+/// and delegates work to the appropriate handler for: running a script, `exec`, `shell`,
+/// or `translate`. Exits the process with an appropriate exit code on completion or error.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Typical invocations (examples — not executed in doctests):
+/// // Run a script (auto-detects source OS):
+/// // cmdx path/to/script.sh
+///
+/// // Translate a command from Windows to the current OS:
+/// // cmdx translate --from windows "dir C:\\"
+///
+/// // Start interactive translation shell:
+/// // cmdx shell
+/// ```
 fn main() {
     let args: Vec<String> = env::args().collect();
     
@@ -158,7 +186,33 @@ fn main() {
     }
 }
 
-/// Detect source OS from script file extension or shebang
+/// Detects the source operating system of a script file.
+///
+/// Detection is performed (in priority order) by:
+/// 1. File extension (e.g., `.bat`, `.cmd`, `.ps1` → Windows; `.sh`, `.bash`, `.zsh` → Linux).
+/// 2. Shebang (`#!`) indicating a Unix-like script.
+/// 3. Common Windows batch content markers (e.g., `@echo off`, `REM `).
+///
+/// When detection succeeds, a notice is printed to stderr unless `config.quiet` is true.
+/// If no match is found or the file cannot be read, the host OS returned by `detect_os()` is used
+/// as a fallback and a warning is printed (unless `config.quiet`).
+///
+/// # Parameters
+///
+/// - `script_path`: filesystem path to the script to inspect.
+/// - `config`: CLI configuration controlling verbosity and colorization.
+///
+/// # Returns
+///
+/// The `Os` variant representing the detected source operating system.
+///
+/// # Examples
+///
+/// ```
+/// let cfg = CliConfig::default();
+/// let os = detect_os_from_script("example.sh", &cfg);
+/// assert_eq!(os, Os::Linux);
+/// ```
 fn detect_os_from_script(script_path: &str, config: &CliConfig) -> Os {
     let path = Path::new(script_path);
     
@@ -225,12 +279,47 @@ fn detect_os_from_script(script_path: &str, config: &CliConfig) -> Os {
     current
 }
 
-/// Check if a flag exists in arguments
+/// Determines whether the specified flag is present in the argument list.
+///
+/// `args` is searched for an exact match of `flag`.
+///
+/// # Examples
+///
+/// ```
+/// let args = vec!["--verbose".to_string(), "file.txt".to_string()];
+/// assert!(has_flag(&args, "--verbose"));
+/// assert!(!has_flag(&args, "--help"));
+/// ```
+///
+/// # Returns
+///
+/// `true` if `flag` is found in `args`, `false` otherwise.
 fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-/// Parse CLI configuration from arguments
+/// Builds a CliConfig from command-line arguments and the environment.
+///
+/// The returned configuration enables flags when their corresponding command-line
+/// options are present or when the `NO_COLOR` environment variable is set for
+/// `no_color`.
+///
+/// Flags recognized:
+/// - `--verbose` or `-v` → `verbose`
+/// - `--quiet` or `-q` → `quiet`
+/// - `--dry-run` or `-n` → `dry_run`
+/// - `--no-color` or `NO_COLOR` environment variable → `no_color`
+///
+/// # Examples
+///
+/// ```
+/// let args = vec!["cmd".to_string(), "--verbose".to_string(), "--no-color".to_string()];
+/// let cfg = parse_cli_config(&args);
+/// assert!(cfg.verbose);
+/// assert!(cfg.no_color);
+/// assert!(!cfg.quiet);
+/// assert!(!cfg.dry_run);
+/// ```
 fn parse_cli_config(args: &[String]) -> CliConfig {
     CliConfig {
         verbose: has_flag(args, "--verbose") || has_flag(args, "-v"),
@@ -252,7 +341,23 @@ mod colors {
     pub const RED: &str = "\x1b[31m";
 }
 
-/// Colorize text if colors are enabled
+/// Apply ANSI color codes to `text` when color output is enabled in `config`.
+///
+/// If `config.no_color` is true, the original `text` is returned unchanged; otherwise
+/// the returned string is wrapped with `color` at the start and `colors::RESET` at the end.
+///
+/// # Examples
+///
+/// ```
+/// let cfg = CliConfig::default(); // colors enabled by default
+/// let colored = colorize("ok", colors::GREEN, &cfg);
+/// assert_eq!(colored, format!("{}{}{}", colors::GREEN, "ok", colors::RESET));
+///
+/// let mut no_color_cfg = CliConfig::default();
+/// no_color_cfg.no_color = true;
+/// let plain = colorize("ok", colors::GREEN, &no_color_cfg);
+/// assert_eq!(plain, "ok");
+/// ```
 fn colorize(text: &str, color: &str, config: &CliConfig) -> String {
     if config.no_color {
         text.to_string()
@@ -261,7 +366,31 @@ fn colorize(text: &str, color: &str, config: &CliConfig) -> String {
     }
 }
 
-/// Extract command from arguments, skipping flags
+/// Builds a single command string by joining non-flag arguments, skipping flags and their immediate values.
+///
+/// This scans `args` in order, ignores any argument that starts with `--` and also skips the argument immediately following that flag (treated as the flag's value), then joins the remaining parts with spaces.
+///
+/// # Arguments
+///
+/// * `args` - Slice of arguments to process; items starting with `--` and the subsequent item are omitted.
+///
+/// # Returns
+///
+/// Joined command string containing the remaining arguments separated by spaces.
+///
+/// # Examples
+///
+/// ```
+/// let args = vec![
+///     "cmdx".to_string(),
+///     "--from".to_string(),
+///     "windows".to_string(),
+///     "echo".to_string(),
+///     "hello".to_string(),
+/// ];
+/// let cmd = extract_command(&args);
+/// assert_eq!(cmd, "cmdx echo hello");
+/// ```
 fn extract_command(args: &[String]) -> String {
     let mut command_parts = Vec::new();
     let mut skip_next = false;
@@ -284,7 +413,26 @@ fn extract_command(args: &[String]) -> String {
     command_parts.join(" ")
 }
 
-/// Parse OS argument from command line
+/// Determine the source OS from command-line arguments or fall back to auto-detection.
+///
+/// Checks `args` for the provided `flag` and maps the following token to an `Os` variant:
+/// - "windows" or "win" → `Os::Windows`
+/// - "linux" → `Os::Linux`
+/// - "macos", "mac", or "darwin" → `Os::MacOS`
+/// - "freebsd" → `Os::FreeBSD`
+/// If the flag is present but the value is unrecognized, prints a warning and returns the detected OS. If the flag is not present, returns the detected OS.
+///
+/// # Parameters
+///
+/// - `args`: slice of command-line arguments (typically `std::env::args().collect::<Vec<_>>()`).
+/// - `flag`: the flag to look for (for example `"--from"`).
+///
+/// # Examples
+///
+/// ```
+/// let args = vec!["cmdx".to_string(), "--from".to_string(), "windows".to_string()];
+/// assert_eq!(parse_os_arg(&args, "--from"), Os::Windows);
+/// ```
 fn parse_os_arg(args: &[String], flag: &str) -> Os {
     for i in 0..args.len() - 1 {
         if args[i] == flag {
@@ -341,7 +489,23 @@ fn print_usage(prog: &str) {
     println!("    {} translate --from linux --to windows \"apt install vim\"", prog);
 }
 
-/// Translate and print a command
+/// Translates a command from one OS to another and prints the original command, the translated command, and any translation warnings.
+///
+/// On success prints:
+/// - "Original [<from_os>]: <command>"
+/// - "Translated [<to_os>]: <translated command>"
+/// - A "Warnings:" section with each warning on its own line if any warnings were produced.
+///
+/// # Errors
+///
+/// Returns `Err(TranslationError)` if translation fails.
+///
+/// # Examples
+///
+/// ```
+/// // Translate and print a Windows command to the detected host OS.
+/// translate_and_print("dir C:\\", Os::Windows, detect_os()).unwrap();
+/// ```
 fn translate_and_print(command: &str, from_os: Os, to_os: Os) -> Result<(), TranslationError> {
     let result = translate_full(command, from_os, to_os)?;
     
@@ -358,7 +522,18 @@ fn translate_and_print(command: &str, from_os: Os, to_os: Os) -> Result<(), Tran
     Ok(())
 }
 
-/// Execute a translated command
+/// Translate a command from one OS to another and run the resulting command.
+///
+/// On success returns the child process exit code. Translation warnings (if any)
+/// are printed to stderr before execution. If the translation produces an empty
+/// command or if translation/spawning/waiting fails, an `Err` is returned.
+///
+/// # Examples
+///
+/// ```
+/// let exit = exec_command("echo hello", Os::Linux, Os::MacOS).unwrap();
+/// assert!(exit == 0 || exit > 0);
+/// ```
 fn exec_command(command: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn std::error::Error>> {
     // Translate the command
     let result = translate_full(command, from_os, to_os)?;
@@ -394,7 +569,21 @@ fn exec_command(command: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn st
     Ok(status.code().unwrap_or(EXIT_EXECUTION_ERROR))
 }
 
-/// Run an interactive translation shell
+/// Start a REPL that reads commands from stdin, translates each line from `from_os` to `to_os`, prints any warnings, and executes the translated command.
+///
+/// The loop prompts with `cmdx [from→to]>`, ignores empty input, and exits on EOF or when the user enters `exit` or `quit`.
+///
+/// # Returns
+///
+/// `Ok(())` when the session ends normally; `Err` if an I/O operation (prompt flush or input read) fails.
+///
+/// # Examples
+///
+/// ```
+/// // Start an interactive shell translating from Linux to the host OS (example only).
+/// // In real use this reads from stdin and blocks until EOF or "exit"/"quit".
+/// let _ = run_interactive_shell(Os::Linux, Os::Linux);
+/// ```
 fn run_interactive_shell(from_os: Os, to_os: Os) -> Result<(), Box<dyn std::error::Error>> {
     let stdin = io::stdin();
     let mut reader = stdin.lock();
@@ -451,7 +640,21 @@ fn run_interactive_shell(from_os: Os, to_os: Os) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-/// Execute a shell command using the system shell
+/// Run a command string through the platform's system shell.
+///
+/// On Windows this invokes `cmd /C <command>`, on other systems it invokes `sh -c <command>`.
+/// The child process inherits stdin, stdout and stderr so interactive programs behave normally.
+///
+/// # Returns
+///
+/// `Ok(())` if the command exited with status code 0, `Err` containing an error or the child's exit code otherwise.
+///
+/// # Examples
+///
+/// ```
+/// let res = execute_shell_command("echo hello");
+/// assert!(res.is_ok());
+/// ```
 fn execute_shell_command(command: &str) -> Result<(), Box<dyn std::error::Error>> {
     let shell = if cfg!(target_os = "windows") {
         "cmd"
@@ -480,7 +683,30 @@ fn execute_shell_command(command: &str) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// Run a script file with translation (with config support)
+/// Execute a script file line-by-line, translating each non-skipped line from `from_os` to `to_os` and optionally running the translated commands according to `config`.
+///
+/// The function reads the file at `script_path`, skips empty and OS-specific comment/directive lines, translates each remaining line using the translation layer, prints translation and warnings according to `config`, and executes translated commands unless `config.dry_run` is set. It continues processing remaining lines after translation or execution errors and returns a final exit code representing the overall outcome.
+///
+/// Returns the final exit code: `EXIT_SUCCESS` when no translation or execution errors occurred, `EXIT_TRANSLATION_ERROR` if any line failed to translate, or `EXIT_EXECUTION_ERROR` if any executed command failed. Returns `Err` for file-not-found and I/O errors encountered while reading the script.
+///
+/// # Examples
+///
+/// ```
+/// use std::fs;
+/// use std::io::Write;
+/// // Create a small temporary script file
+/// let path = "test_script.sh";
+/// let mut f = fs::File::create(path).unwrap();
+/// writeln!(f, "echo hello").unwrap();
+///
+/// let config = crate::CliConfig::default();
+/// // Assuming `Os::Linux` is available in scope
+/// let code = crate::run_script_with_config(path, crate::Os::Linux, crate::Os::Linux, &config).unwrap();
+/// assert_eq!(code, crate::EXIT_SUCCESS);
+///
+/// // Cleanup
+/// let _ = fs::remove_file(path);
+/// ```
 fn run_script_with_config(script_path: &str, from_os: Os, to_os: Os, config: &CliConfig) -> Result<i32, Box<dyn std::error::Error>> {
     let path = Path::new(script_path);
     

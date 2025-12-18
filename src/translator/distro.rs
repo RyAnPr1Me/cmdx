@@ -36,6 +36,17 @@ pub enum Distro {
 }
 
 impl fmt::Display for Distro {
+    /// Formats a `Distro` value as its human-readable distribution name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use translator::distro::Distro;
+    ///
+    /// assert_eq!(format!("{}", Distro::Ubuntu), "Ubuntu");
+    /// assert_eq!(format!("{}", Distro::OpenSUSE), "openSUSE");
+    /// assert_eq!(format!("{}", Distro::Generic), "Generic Linux");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Distro::Debian => write!(f, "Debian"),
@@ -60,6 +71,14 @@ impl fmt::Display for Distro {
 pub struct ParseDistroError(String);
 
 impl fmt::Display for ParseDistroError {
+    /// Formats the parse error into a human-readable message containing the unknown input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let err = ParseDistroError("foo".to_string());
+    /// assert_eq!(format!("{}", err), "Unknown distribution: 'foo'");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Unknown distribution: '{}'", self.0)
     }
@@ -70,6 +89,19 @@ impl std::error::Error for ParseDistroError {}
 impl FromStr for Distro {
     type Err = ParseDistroError;
 
+    /// Parses a case-insensitive distribution name into a `Distro`.
+    ///
+    /// Recognizes common aliases (for example: `"debian"`, `"ubuntu"`, `"rhel"`, `"centos"`,
+    /// `"fedora"`, `"arch"`, `"manjaro"`, `"opensuse"`, `"alpine"`, `"gentoo"`, `"void"`,
+    /// `"nixos"`, and `"generic"`). Returns `Err(ParseDistroError)` when the input is not a known distro.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::str::FromStr;
+    /// let d: crate::translator::distro::Distro = "Ubuntu".parse().unwrap();
+    /// assert_eq!(d, crate::translator::distro::Distro::Ubuntu);
+    /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "debian" => Ok(Distro::Debian),
@@ -91,12 +123,32 @@ impl FromStr for Distro {
 }
 
 impl Distro {
-    /// Parse distro from string (case-insensitive)
+    /// Parse a distro name case-insensitively into a `Distro`.
+    ///
+    /// Returns `Some(Distro)` when the input matches a known distribution, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::translator::distro::Distro;
+    /// assert_eq!(Distro::parse("Ubuntu"), Some(Distro::Ubuntu));
+    /// assert_eq!(Distro::parse("unknown-distro"), None);
+    /// ```
     pub fn parse(s: &str) -> Option<Distro> {
         s.parse().ok()
     }
 
-    /// Get the primary package manager for this distro
+    /// Return the primary package manager associated with the distribution.
+    ///
+    /// Maps each `Distro` variant to its canonical `PackageManager` (for example, Debian and
+    /// Ubuntu map to `Apt`, Fedora maps to `Dnf`, Arch maps to `Pacman`, etc.).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let pm = crate::translator::distro::Distro::Ubuntu.package_manager();
+    /// assert_eq!(pm, crate::translator::distro::PackageManager::Apt);
+    /// ```
     pub fn package_manager(&self) -> PackageManager {
         match self {
             Distro::Debian | Distro::Ubuntu => PackageManager::Apt,
@@ -139,6 +191,14 @@ pub enum PackageManager {
 }
 
 impl fmt::Display for PackageManager {
+    /// Formats the package manager as its canonical command name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let s = format!("{}", PackageManager::Apt);
+    /// assert_eq!(s, "apt");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PackageManager::Apt => write!(f, "apt"),
@@ -158,6 +218,20 @@ impl fmt::Display for PackageManager {
 impl FromStr for PackageManager {
     type Err = ParseDistroError;
 
+    /// Parses a package manager name or alias (case-insensitive) into a `PackageManager`.
+    ///
+    /// Recognizes common aliases such as `"apt"`, `"apt-get"`, `"aptitude"`, `"xbps-install"`, `"nix-env"`, etc.
+    /// On unknown input, returns a `ParseDistroError` containing the original string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::str::FromStr;
+    /// let pm = PackageManager::from_str("Apt").unwrap();
+    /// assert_eq!(pm, PackageManager::Apt);
+    ///
+    /// assert!(PackageManager::from_str("unknown-pm").is_err());
+    /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "apt" | "apt-get" | "aptitude" => Ok(PackageManager::Apt),
@@ -176,12 +250,35 @@ impl FromStr for PackageManager {
 }
 
 impl PackageManager {
-    /// Parse package manager from string
+    /// Parses a package manager name string into a `PackageManager`.
+    ///
+    /// Returns `Some(PackageManager)` if the input matches a known package manager alias, `None` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let pm = PackageManager::parse("apt");
+    /// assert_eq!(pm, Some(PackageManager::Apt));
+    ///
+    /// let none = PackageManager::parse("unknown-pm");
+    /// assert_eq!(none, None);
+    /// ```
     pub fn parse(s: &str) -> Option<PackageManager> {
         s.parse().ok()
     }
 
-    /// Get the command name for this package manager
+    /// Provides the canonical CLI executable name for this package manager.
+    ///
+    /// # Returns
+    ///
+    /// `&'static str` — the command executable name associated with the package manager (for example `"apt"`, `"xbps-install"`, or `"nix-env"`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let cmd = PackageManager::Apt.command_name();
+    /// assert_eq!(cmd, "apt");
+    /// ```
     pub fn command_name(&self) -> &'static str {
         match self {
             PackageManager::Apt => "apt",

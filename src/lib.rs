@@ -28,15 +28,46 @@ pub use translator::package_manager::{
 };
 
 
-/// Translates a Windows command string to Linux using cmdx.
-/// Returns a newly allocated C string. Must be freed with free_string.
-/// 
+/// Translate a Windows command string into its Linux equivalent and return it as a newly allocated C string.
+///
+/// The function accepts a pointer to a null-terminated C string containing a Windows command, attempts to translate it
+/// to a Linux command using the library's translator, and returns a pointer to a newly allocated C string containing
+/// the translated command. The returned pointer must be released by calling `free_string`.
+///
 /// # Safety
-/// 
-/// This function is unsafe because it:
-/// - Dereferences a raw pointer (`cmd`)
-/// - The caller must ensure `cmd` is a valid null-terminated C string
-/// - The returned pointer must be freed by calling `free_string`
+///
+/// - `cmd` must be a valid, non-null, null-terminated C string.
+/// - The caller must ensure the pointer is not mutated or freed while this function executes.
+/// - The returned pointer is owned by the caller and must be freed with `free_string`; using or freeing it in any
+///   other way is undefined behavior.
+///
+/// # Returns
+///
+/// A pointer to a newly allocated null-terminated C string containing the translated command, or a null pointer if
+/// `cmd` is null. The pointer must be freed with `free_string`.
+///
+/// # Examples
+///
+/// ```
+/// use std::ffi::CString;
+/// use std::os::raw::c_char;
+///
+/// // Prepare input
+/// let input = CString::new("dir C:\\").unwrap();
+/// let in_ptr: *const c_char = input.as_ptr();
+///
+/// // Call the FFI function (unsafe)
+/// let out_ptr = unsafe { preprocess_command(in_ptr) };
+/// assert!(!out_ptr.is_null());
+///
+/// // Convert result back to Rust and free it
+/// let out_cstr = unsafe { CString::from_raw(out_ptr) };
+/// let translated = out_cstr.to_string_lossy();
+/// // free_string is not needed here because from_raw already took ownership and freed on drop;
+/// // in actual usage, free_string should be used to free the pointer returned by preprocess_command.
+///
+/// assert!(!translated.is_empty());
+/// ```
 #[no_mangle]
 pub unsafe extern "C" fn preprocess_command(cmd: *const c_char) -> *mut c_char {
     if cmd.is_null() {
@@ -60,14 +91,32 @@ pub unsafe extern "C" fn preprocess_command(cmd: *const c_char) -> *mut c_char {
     c_result.into_raw()
 }
 
-/// Frees a C string previously allocated by preprocess_command.
-/// 
+/// Frees a C string that was previously allocated and returned to C.
+///
+/// This function reclaims the memory for a `*mut c_char` by reconstructing a
+/// `CString` and dropping it. Passing a null pointer is a no-op.
+///
 /// # Safety
-/// 
-/// This function is unsafe because it:
-/// - Dereferences a raw pointer (`s`)
-/// - The caller must ensure `s` was allocated by `preprocess_command`
-/// - The pointer must not be used after calling this function
+///
+/// - `s` must either be null or be a pointer returned by `preprocess_command`
+///   (or otherwise created by `CString::into_raw`).
+/// - The caller must ensure the pointer is not used after this call.
+/// - Calling this with a pointer not created by `CString::into_raw` or with a
+///   pointer that has already been freed is undefined behavior.
+///
+/// # Examples
+///
+/// ```
+/// use std::ffi::CString;
+/// use libc::c_char;
+///
+/// // Create a C string and take ownership of its raw pointer.
+/// let s = CString::new("example").unwrap();
+/// let ptr: *mut c_char = s.into_raw();
+///
+/// // Free the string using the FFI helper.
+/// unsafe { crate::free_string(ptr); }
+/// ```
 #[no_mangle]
 pub unsafe extern "C" fn free_string(s: *mut c_char) {
     if s.is_null() {
