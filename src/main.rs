@@ -26,6 +26,39 @@ fn main() {
         std::process::exit(EXIT_USAGE_ERROR);
     }
 
+    // Check if first arg is a help/version flag
+    match args[1].as_str() {
+        "--help" | "-h" => {
+            print_usage(&args[0]);
+            std::process::exit(EXIT_SUCCESS);
+        }
+        "--version" | "-v" => {
+            println!("cmdx {}", env!("CARGO_PKG_VERSION"));
+            std::process::exit(EXIT_SUCCESS);
+        }
+        _ => {}
+    }
+
+    // Check if the first argument is a file path (Proton-style usage)
+    let first_arg = &args[1];
+    if !first_arg.starts_with("--") && !matches!(first_arg.as_str(), "exec" | "shell" | "translate") {
+        // This is a script path - auto-detect and run
+        let script_path = first_arg;
+        let to_os = detect_os();
+        
+        // Auto-detect source OS from file extension
+        let from_os = detect_os_from_script(script_path);
+        
+        match run_script(script_path, from_os, to_os) {
+            Ok(code) => std::process::exit(code),
+            Err(e) => {
+                eprintln!("Script execution error: {}", e);
+                std::process::exit(EXIT_EXECUTION_ERROR);
+            }
+        }
+    }
+
+    // Otherwise, handle traditional subcommand style
     match args[1].as_str() {
         "exec" => {
             let from_os = parse_os_arg(&args, "--from");
@@ -58,25 +91,6 @@ fn main() {
                 std::process::exit(EXIT_EXECUTION_ERROR);
             }
         }
-        "script" => {
-            let from_os = parse_os_arg(&args, "--from");
-            let to_os = detect_os();
-            
-            let script_path = extract_command(&args[2..]);
-            if script_path.is_empty() {
-                eprintln!("Error: script requires a file path");
-                print_usage(&args[0]);
-                std::process::exit(EXIT_USAGE_ERROR);
-            }
-            
-            match run_script(&script_path, from_os, to_os) {
-                Ok(code) => std::process::exit(code),
-                Err(e) => {
-                    eprintln!("Script execution error: {}", e);
-                    std::process::exit(EXIT_EXECUTION_ERROR);
-                }
-            }
-        }
         "translate" => {
             let from_os = parse_os_arg(&args, "--from");
             let to_os = if has_flag(&args, "--to") {
@@ -101,20 +115,53 @@ fn main() {
                 }
             }
         }
-        "--help" | "-h" => {
-            print_usage(&args[0]);
-            std::process::exit(EXIT_SUCCESS);
-        }
-        "--version" | "-v" => {
-            println!("cmdx {}", env!("CARGO_PKG_VERSION"));
-            std::process::exit(EXIT_SUCCESS);
-        }
         _ => {
-            eprintln!("Error: unknown command '{}'", args[1]);
-            print_usage(&args[0]);
+            eprintln!("Error: unknown command or file not found: '{}'", args[1]);
+            eprintln!("Use --help for usage information");
             std::process::exit(EXIT_USAGE_ERROR);
         }
     }
+}
+
+/// Detect source OS from script file extension or shebang
+fn detect_os_from_script(script_path: &str) -> Os {
+    let path = Path::new(script_path);
+    
+    // First, try to detect from file extension
+    if let Some(ext) = path.extension() {
+        let ext_str = ext.to_string_lossy().to_lowercase();
+        match ext_str.as_str() {
+            "bat" | "cmd" | "ps1" => {
+                eprintln!("[cmdx] Detected Windows script from extension: .{}", ext_str);
+                return Os::Windows;
+            }
+            "sh" | "bash" | "zsh" => {
+                eprintln!("[cmdx] Detected Linux/Unix script from extension: .{}", ext_str);
+                return Os::Linux;
+            }
+            _ => {}
+        }
+    }
+    
+    // Try to detect from shebang
+    if let Ok(content) = fs::read_to_string(path) {
+        let first_line = content.lines().next().unwrap_or("");
+        if first_line.starts_with("#!") {
+            eprintln!("[cmdx] Detected Linux/Unix script from shebang: {}", first_line);
+            return Os::Linux;
+        }
+        
+        // Check for Windows batch markers
+        if first_line.starts_with("@echo off") || first_line.starts_with("REM ") {
+            eprintln!("[cmdx] Detected Windows batch script from content");
+            return Os::Windows;
+        }
+    }
+    
+    // Default to current OS if can't detect
+    let current = detect_os();
+    eprintln!("[cmdx] Could not detect script type, assuming {} script", current);
+    current
 }
 
 /// Check if a flag exists in arguments
@@ -166,13 +213,18 @@ fn parse_os_arg(args: &[String], flag: &str) -> Os {
 
 /// Print usage information
 fn print_usage(prog: &str) {
-    println!("cmdx - Cross-platform command translation layer\n");
+    println!("cmdx - Cross-platform command translation layer (like Proton/WINE for scripts)\n");
     println!("USAGE:");
-    println!("    {} <COMMAND> [OPTIONS]\n", prog);
-    println!("COMMANDS:");
+    println!("    {} <script>              Run script with auto-detection (Proton-style)", prog);
+    println!("    {} <COMMAND> [OPTIONS]   Advanced usage with explicit options\n", prog);
+    println!("PROTON-STYLE (Recommended):");
+    println!("    Just run any script and cmdx will auto-detect the source OS and translate:");
+    println!("    {} path/to/script.bat    Run Windows batch script on any OS", prog);
+    println!("    {} path/to/script.sh     Run Linux shell script on any OS", prog);
+    println!("    {} install.ps1           Run PowerShell script on any OS\n", prog);
+    println!("ADVANCED COMMANDS:");
     println!("    exec <command>           Execute a command with translation");
     println!("    shell                    Start interactive translation shell");
-    println!("    script <file>            Execute a script file with translation");
     println!("    translate <command>      Translate and print command without executing\n");
     println!("OPTIONS:");
     println!("    --from <os>             Source OS (windows, linux, macos)");
@@ -180,9 +232,13 @@ fn print_usage(prog: &str) {
     println!("    -h, --help              Print this help message");
     println!("    -v, --version           Print version information\n");
     println!("EXAMPLES:");
+    println!("    # Proton-style (easiest):");
+    println!("    {} install.bat", prog);
+    println!("    {} setup.sh", prog);
+    println!();
+    println!("    # Advanced usage:");
     println!("    {} exec --from windows \"dir /s\"", prog);
     println!("    {} shell --from windows", prog);
-    println!("    {} script --from windows install.bat", prog);
     println!("    {} translate --from linux --to windows \"apt install vim\"", prog);
 }
 
@@ -349,14 +405,22 @@ fn run_script(script_path: &str, from_os: Os, to_os: Os) -> Result<i32, Box<dyn 
             continue;
         }
         
-        // Skip comments based on source OS
-        let is_comment = match from_os {
-            Os::Windows => trimmed.starts_with("REM ") || trimmed.starts_with("::"),
+        // Skip comments and special directives based on source OS
+        let should_skip = match from_os {
+            Os::Windows => {
+                trimmed.starts_with("REM ") || 
+                trimmed.starts_with("::") ||
+                trimmed == "@echo off" ||
+                trimmed == "@echo on" ||
+                trimmed.starts_with("@REM") ||
+                trimmed == "echo." ||
+                trimmed == "echo,"
+            },
             _ => trimmed.starts_with('#'),
         };
         
-        if is_comment {
-            println!("[{}] {}", line_num + 1, trimmed);
+        if should_skip {
+            println!("[{}] {} [skipped]", line_num + 1, trimmed);
             continue;
         }
         

@@ -41,9 +41,51 @@ cmdx = "0.1"
 
 ## CLI Usage
 
-The `cmdx` command-line tool provides a translation layer for running cross-OS scripts and commands:
+The `cmdx` CLI works like **Proton/WINE for shell scripts** - just run any script and it automatically detects the OS and translates commands in real-time!
 
-### Execute a command with translation
+### 🚀 Proton-Style Usage (Easiest!)
+
+Just prefix any script with `cmdx` and it will auto-detect and translate:
+
+```bash
+# Run a Windows batch script on Linux (auto-detects from .bat extension)
+cmdx install.bat
+
+# Run a Linux shell script on Windows (auto-detects from .sh extension)
+cmdx setup.sh
+
+# Run a PowerShell script anywhere (auto-detects from .ps1 extension)
+cmdx deploy.ps1
+```
+
+**That's it!** No flags needed. cmdx automatically:
+- Detects the source OS from file extension (`.bat`, `.cmd`, `.ps1` = Windows; `.sh` = Linux)
+- Detects your current OS as the target
+- Translates each command line-by-line during execution
+- Handles comments, echo statements, and special directives
+
+### Example Output
+
+Running `cmdx install.bat` on Linux:
+
+```
+[cmdx] Detected Windows script from extension: .bat
+Executing script: install.bat (10 lines)
+Translating from Windows to Linux
+
+[1] @echo off [skipped]
+[2] REM Installing software [skipped]
+[3] echo Starting installation... → echo Starting installation...
+Starting installation...
+[4] dir /s → ls -R
+[files listed]
+[5] type readme.txt → cat readme.txt
+[file contents]
+```
+
+### Advanced Usage
+
+#### Execute a single command with translation
 
 ```bash
 # Run a Windows command on Linux
@@ -53,17 +95,7 @@ cmdx exec --from windows "dir /s"
 cmdx exec --from linux "ls -la"
 ```
 
-### Run a script file with translation
-
-```bash
-# Execute a Windows batch script on Linux
-cmdx script --from windows install.bat
-
-# Execute a Linux shell script on Windows
-cmdx script --from linux setup.sh
-```
-
-### Interactive translation shell
+#### Interactive translation shell
 
 ```bash
 # Start an interactive shell that translates Windows commands to Linux
@@ -79,7 +111,7 @@ cmdx [Windows→Linux]> type readme.txt
 [file contents]
 ```
 
-### Preview translation without execution
+#### Preview translation without execution
 
 ```bash
 # See how a command would be translated
@@ -98,10 +130,13 @@ cmdx translate --from linux --to linux "apt install -y vim"
 ### Command-line options
 
 ```
+USAGE:
+    cmdx <script>              Run script with auto-detection (Proton-style)
+    cmdx <COMMAND> [OPTIONS]   Advanced usage with explicit options
+
 COMMANDS:
     exec <command>           Execute a command with translation
     shell                    Start interactive translation shell
-    script <file>            Execute a script file with translation
     translate <command>      Translate and print command without executing
 
 OPTIONS:
