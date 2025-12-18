@@ -31,6 +31,15 @@ pub enum PackageOperation {
 }
 
 impl fmt::Display for PackageOperation {
+    /// Formats the package operation as its lowercase command name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::translator::package_manager::PackageOperation;
+    /// assert_eq!(format!("{}", PackageOperation::Install), "install");
+    /// assert_eq!(format!("{}", PackageOperation::AutoRemove), "autoremove");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PackageOperation::Install => write!(f, "install"),
@@ -64,6 +73,34 @@ pub struct PackageTranslationResult {
 }
 
 impl PackageTranslationResult {
+    /// Creates a new translation result for a package manager command.
+    ///
+    /// Initializes `warnings` as an empty list and `requires_sudo` as `false`.
+    ///
+    /// # Parameters
+    ///
+    /// - `command`: The translated command string (may be empty until translation is assembled).
+    /// - `original`: The original input command provided by the user.
+    /// - `from_pm`: The detected or specified source package manager.
+    /// - `to_pm`: The target package manager to translate the command into.
+    ///
+    /// # Returns
+    ///
+    /// A `PackageTranslationResult` populated with the provided fields and default `warnings` and `requires_sudo`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let res = crate::translator::package_manager::PackageTranslationResult::new(
+    ///     "apt install foo".to_string(),
+    ///     "dnf install foo".to_string(),
+    ///     crate::distro::PackageManager::Dnf,
+    ///     crate::distro::PackageManager::Apt,
+    /// );
+    /// assert_eq!(res.original, "dnf install foo");
+    /// assert!(res.warnings.is_empty());
+    /// assert!(!res.requires_sudo);
+    /// ```
     pub fn new(
         command: String,
         original: String,
@@ -82,6 +119,27 @@ impl PackageTranslationResult {
 }
 
 impl fmt::Display for PackageTranslationResult {
+    /// Formats the translation as its translated command string.
+    ///
+    /// This `Display` implementation prints only the `command` field of the
+    /// `PackageTranslationResult`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use translator::package_manager::{PackageTranslationResult, PackageManager};
+    ///
+    /// let res = PackageTranslationResult {
+    ///     command: "dnf install foo".into(),
+    ///     original: "apt install foo".into(),
+    ///     from_pm: PackageManager::Apt,
+    ///     to_pm: PackageManager::Dnf,
+    ///     warnings: Vec::new(),
+    ///     requires_sudo: false,
+    /// };
+    ///
+    /// assert_eq!(format!("{}", res), "dnf install foo");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.command)
     }
@@ -101,6 +159,17 @@ pub enum PackageTranslationError {
 }
 
 impl fmt::Display for PackageTranslationError {
+    /// Formats a PackageTranslationError into a human-readable message.
+    ///
+    /// Each error variant is rendered as a concise string suitable for display to users.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use translator::package_manager::PackageTranslationError;
+    /// let err = PackageTranslationError::EmptyCommand;
+    /// assert_eq!(format!("{}", err), "Empty command provided");
+    /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PackageTranslationError::NotPackageManagerCommand(cmd) => {
@@ -133,6 +202,19 @@ pub struct PackageFlagMapping {
 }
 
 impl PackageFlagMapping {
+    /// Creates a `PackageFlagMapping` that maps a source flag to a target flag.
+    ///
+    /// The `source` is the flag form used by the originating package manager (e.g., `"-y"`),
+    /// and the `target` is the equivalent form for the destination package manager (e.g., `"--assumeyes"`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = PackageFlagMapping::new("-y", "--assumeyes");
+    /// assert_eq!(m.source, "-y");
+    /// assert_eq!(m.target, "--assumeyes");
+    /// assert!(m.description.is_none());
+    /// ```
     pub fn new(source: &str, target: &str) -> Self {
         Self {
             source: source.to_string(),
@@ -141,6 +223,22 @@ impl PackageFlagMapping {
         }
     }
 
+    /// Creates a `PackageFlagMapping` that associates a source flag with a target flag and a human-readable description.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: the flag string used by the source package manager (e.g., "-y").
+    /// - `target`: the equivalent flag string or strings for the target package manager (e.g., "--assumeyes").
+    /// - `description`: a short explanation of the flag's purpose or behavior.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = PackageFlagMapping::with_description("-y", "--assumeyes", "automatically answer yes to prompts");
+    /// assert_eq!(m.source, "-y");
+    /// assert_eq!(m.target, "--assumeyes");
+    /// assert_eq!(m.description.as_deref(), Some("automatically answer yes to prompts"));
+    /// ```
     pub fn with_description(source: &str, target: &str, description: &str) -> Self {
         Self {
             source: source.to_string(),
@@ -164,6 +262,19 @@ struct OperationMapping {
 }
 
 impl OperationMapping {
+    /// Create an OperationMapping with the given base command and sudo requirement.
+    ///
+    /// The mapping is initialized with an empty list of flag mappings and no notes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let m = OperationMapping::new("apt install".into(), true);
+    /// assert_eq!(m.command, "apt install");
+    /// assert!(m.requires_sudo);
+    /// assert!(m.flag_mappings.is_empty());
+    /// assert!(m.notes.is_none());
+    /// ```
     fn new(command: &str, requires_sudo: bool) -> Self {
         Self {
             command: command.to_string(),
@@ -173,11 +284,31 @@ impl OperationMapping {
         }
     }
 
+    /// Sets the operation's flag mappings and returns the updated `OperationMapping`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mapping = OperationMapping::new("apt install".to_string(), true)
+    ///     .with_flags(vec![PackageFlagMapping::new("-y", "--yes")]);
+    /// assert_eq!(mapping.flag_mappings.len(), 1);
+    /// ```
     fn with_flags(mut self, flags: Vec<PackageFlagMapping>) -> Self {
         self.flag_mappings = flags;
         self
     }
 
+    /// Sets supplementary notes for the operation mapping and returns the updated mapping.
+    ///
+    /// The `notes` string provides human-readable additional information about the operation
+    /// (e.g., caveats or behavioral details) and is stored on the mapping.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let mapping = OperationMapping::new("apt install".to_string(), true)
+    ///     .with_notes("Requires network access and may prompt for confirmation");
+    /// ```
     fn with_notes(mut self, notes: &str) -> Self {
         self.notes = Some(notes.to_string());
         self
@@ -797,7 +928,18 @@ lazy_static! {
     };
 }
 
-/// Parse a package manager command to determine the operation and arguments
+/// Determines the package manager, the requested operation, and the remaining arguments from a command string.
+///
+/// The input is trimmed and may start with an optional leading `sudo`. Known package manager tokens (e.g., `apt`, `dnf`, `pacman`, etc.) and their operations are recognized; the function returns a tuple of `(PackageManager, PackageOperation, Vec<String>)` where the vector contains the arguments (package names or remaining tokens) following the detected operation. Returns `PackageTranslationError::EmptyCommand` for empty input, `PackageTranslationError::NotPackageManagerCommand` if no known package manager is found, or `PackageTranslationError::UnsupportedOperation` if the detected package manager does not support the parsed operation.
+///
+/// # Examples
+///
+/// ```
+/// let (pm, op, args) = parse_package_command("sudo apt install curl").unwrap();
+/// assert_eq!(pm, PackageManager::Apt);
+/// assert_eq!(op, PackageOperation::Install);
+/// assert_eq!(args, vec!["curl".to_string()]);
+/// ```
 fn parse_package_command(input: &str) -> Result<(PackageManager, PackageOperation, Vec<String>), PackageTranslationError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -832,7 +974,20 @@ fn parse_package_command(input: &str) -> Result<(PackageManager, PackageOperatio
     Ok((pm, operation, args))
 }
 
-/// Detect which package manager is being used
+/// Identify the package manager represented by the first command token.
+///
+/// Returns the detected `PackageManager` and the token index where the operation
+/// is expected (typically `1` for a single-token manager name). Returns
+/// `PackageTranslationError::NotPackageManagerCommand` when the token is not a
+/// recognized package manager.
+///
+/// # Examples
+///
+/// ```
+/// let (pm, idx) = super::detect_package_manager("apt").unwrap();
+/// assert_eq!(pm, super::distro::PackageManager::Apt);
+/// assert_eq!(idx, 1);
+/// ```
 fn detect_package_manager(cmd: &str) -> Result<(PackageManager, usize), PackageTranslationError> {
     match cmd.to_lowercase().as_str() {
         "apt" | "apt-get" | "aptitude" => Ok((PackageManager::Apt, 1)),
@@ -848,7 +1003,19 @@ fn detect_package_manager(cmd: &str) -> Result<(PackageManager, usize), PackageT
     }
 }
 
-/// Detect which operation is being performed
+/// Map the first token of a command to the corresponding `PackageOperation` for a given package manager.
+///
+/// This inspects `parts[0]` (case-insensitive) and returns the operation that token represents for `pm`.
+/// Returns `PackageTranslationError::NotPackageManagerCommand` if `parts` is empty, and
+/// `PackageTranslationError::UnsupportedOperation(token)` if the token is not recognized for the provided package manager.
+///
+/// # Examples
+///
+/// ```
+/// let parts = ["install", "vim"];
+/// let op = detect_operation(PackageManager::Apt, &parts).unwrap();
+/// assert_eq!(op, PackageOperation::Install);
+/// ```
 fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperation, PackageTranslationError> {
     if parts.is_empty() {
         return Err(PackageTranslationError::NotPackageManagerCommand("".to_string()));
@@ -959,7 +1126,41 @@ fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperati
     }
 }
 
-/// Translate flags from source package manager to target package manager
+/// Translate a list of CLI flags from one package manager to another for a given operation.
+///
+/// This function looks up per-operation flag mappings and produces a vector of translated
+/// flag tokens appropriate for the target package manager. Flags that have no mapping
+/// are preserved in the returned list and a warning describing the missing mapping is
+/// appended to `result.warnings`. Flags of the form `--option=value` are translated
+/// while preserving their value when the mapping indicates an equivalent `--option=`
+/// form; when the mapping separates option and value the value is appended as a separate
+/// token. Mappings that expand to multiple target tokens are split on whitespace and
+/// all non-empty parts are included.
+///
+/// # Parameters
+///
+/// - `flags`: list of input flag tokens (e.g., `-y`, `--no-confirm`, `--opt=val`).
+/// - `from_pm`: source package manager of the input flags.
+/// - `to_pm`: target package manager to translate flags for.
+/// - `operation`: package management operation these flags apply to (install, remove, etc.).
+/// - `result`: mutable translation result that will receive warnings about unmapped flags.
+///
+/// # Returns
+///
+/// A vector of translated flag tokens (and preserved original tokens for unmapped flags).
+///
+/// # Examples
+///
+/// ```no_run
+/// use translator::package_manager::{translate_flags, PackageTranslationResult, PackageOperation};
+/// use super::distro::PackageManager;
+///
+/// let flags = vec!["-y".to_string(), "--opt=value".to_string()];
+/// let mut result = PackageTranslationResult::new("".into(), "".into(), PackageManager::Apt, PackageManager::Dnf);
+/// let translated = translate_flags(&flags, PackageManager::Apt, PackageManager::Dnf, PackageOperation::Install, &mut result);
+/// // `translated` now contains target-appropriate tokens or original flags if unmapped,
+/// // and `result.warnings` contains any mapping warnings.
+/// ```
 fn translate_flags(
     flags: &[String],
     from_pm: PackageManager,
@@ -1026,27 +1227,24 @@ fn translate_flags(
     translated_flags
 }
 
-/// Translate a package manager command from one package manager to another
+/// Translate a package manager command string from a specified source package manager to a target package manager.
 ///
-/// # Arguments
+/// Parses the input command, detects the operation and arguments, maps the operation and flags to their equivalents
+/// for the target package manager, and returns a `PackageTranslationResult` containing the translated command,
+/// any warnings about unmapped flags or mismatches, and whether elevated privileges may be required.
 ///
-/// * `input` - The package manager command string to translate
-/// * `from_pm` - The source package manager
-/// * `to_pm` - The target package manager
+/// Returns an `Err(PackageTranslationError)` when translation cannot proceed, for example:
+/// - `PackageTranslationError::EmptyCommand` if the trimmed input is empty.
+/// - `PackageTranslationError::NotPackageManagerCommand(_)` if the command does not start with a recognized package manager.
+/// - `PackageTranslationError::UnsupportedOperation(_)` if the detected operation has no mapping for the target package manager.
 ///
-/// # Returns
-///
-/// * `Ok(PackageTranslationResult)` - The translated command
-/// * `Err(PackageTranslationError)` - Error if translation fails
-///
-/// # Example
+/// # Examples
 ///
 /// ```
-/// use cmdx::translate_package_command;
-/// use cmdx::PackageManager;
+/// use crate::translator::package_manager::{translate_package_command, PackageManager};
 ///
-/// let result = translate_package_command("apt install vim", PackageManager::Apt, PackageManager::Dnf);
-/// // Result: "dnf install vim"
+/// let res = translate_package_command("apt install vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+/// assert_eq!(res.command, "dnf install vim");
 /// ```
 pub fn translate_package_command(
     input: &str,
@@ -1130,7 +1328,23 @@ pub fn translate_package_command(
     Ok(result)
 }
 
-/// Translate a package manager command with automatic detection
+/// Automatically detect the source package manager and translate the given command into the target package manager.
+///
+/// The function trims the input, detects the source package manager and operation, and then produces a translated
+/// command targeting `to_pm`. Errors returned by detection or translation are propagated.
+///
+/// # Returns
+///
+/// `Ok(PackageTranslationResult)` with the translated command on success, or `Err(PackageTranslationError)` if the
+/// input is empty or the command cannot be parsed or translated.
+///
+/// # Examples
+///
+/// ```
+/// let res = translate_package_command_auto("sudo apt install curl", PackageManager::Dnf).unwrap();
+/// assert!(res.command.contains("dnf"));
+/// assert!(res.command.contains("install") || res.command.contains("install"));
+/// ```
 pub fn translate_package_command_auto(
     input: &str,
     to_pm: PackageManager,
@@ -1186,6 +1400,15 @@ mod tests {
         assert!(r.command.contains("vim"));
     }
 
+    /// Verifies that a translation preserves a leading `sudo` prefix when the target operation requires elevated privileges.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let result = translate_package_command("sudo apt install vim", PackageManager::Apt, PackageManager::Dnf).unwrap();
+    /// assert!(result.command.starts_with("sudo"));
+    /// assert!(result.requires_sudo);
+    /// ```
     #[test]
     fn test_sudo_prefix_preserved() {
         let result = translate_package_command("sudo apt install vim", PackageManager::Apt, PackageManager::Dnf);

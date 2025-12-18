@@ -1,6 +1,6 @@
 # Bash completion for cmdx
 # Source this file or copy to /etc/bash_completion.d/
-# Usage: source completions/cmdx.bash
+# _cmdx provides Bash tab-completion for the cmdx command, suggesting subcommands (exec, shell, translate), options, OS values for `--from`/`--to`, and file paths (preferring script files).
 
 _cmdx() {
     local cur prev opts
