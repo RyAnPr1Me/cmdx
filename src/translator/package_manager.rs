@@ -594,11 +594,13 @@ fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperati
         },
         PackageManager::Pacman => {
             // Pacman uses flags rather than subcommands
+            // Common flags: -S (sync/install), -R (remove), -Sy (update), -Syu (upgrade)
+            // -Ss (search), -Si/-Qi (info), -Q (query/list), -Sc (clean)
             if op_str.starts_with('-') {
                 match op_str.as_str() {
-                    "-s" => Ok(PackageOperation::Install),
+                    "-s" | "-sy" => Ok(PackageOperation::Install),
                     "-r" | "-rs" => Ok(PackageOperation::Remove),
-                    "-sy" => Ok(PackageOperation::Update),
+                    "-sy" if parts.len() == 1 => Ok(PackageOperation::Update),
                     "-syu" => Ok(PackageOperation::Upgrade),
                     "-ss" => Ok(PackageOperation::Search),
                     "-si" | "-qi" => Ok(PackageOperation::Info),
@@ -632,7 +634,39 @@ fn detect_operation(pm: PackageManager, parts: &[&str]) -> Result<PackageOperati
             "cache" => Ok(PackageOperation::Clean),
             _ => Err(PackageTranslationError::UnsupportedOperation(op_str)),
         },
-        _ => Err(PackageTranslationError::UnsupportedOperation(op_str)),
+        PackageManager::Emerge => match op_str.as_str() {
+            "" | "-av" | "-a" => Ok(PackageOperation::Install), // emerge pkg or emerge -av pkg
+            "--unmerge" | "-C" => Ok(PackageOperation::Remove),
+            "--sync" => Ok(PackageOperation::Update),
+            "--update" | "-u" => Ok(PackageOperation::Upgrade),
+            "--search" | "-s" => Ok(PackageOperation::Search),
+            "--info" => Ok(PackageOperation::Info),
+            "--depclean" => Ok(PackageOperation::Clean),
+            _ => Err(PackageTranslationError::UnsupportedOperation(op_str)),
+        },
+        PackageManager::Xbps => {
+            // XBPS commands can vary (xbps-install, xbps-remove, xbps-query)
+            match op_str.as_str() {
+                "-s" | "-su" => Ok(PackageOperation::Install),
+                "" => Ok(PackageOperation::Remove), // xbps-remove pkg
+                "-s" if parts.len() > 1 && parts[1] == "-S" => Ok(PackageOperation::Update),
+                "-su" => Ok(PackageOperation::Upgrade),
+                "-rs" => Ok(PackageOperation::Search),
+                "-r" => Ok(PackageOperation::Info),
+                "-l" => Ok(PackageOperation::List),
+                "-o" => Ok(PackageOperation::Clean),
+                _ => Err(PackageTranslationError::UnsupportedOperation(op_str)),
+            }
+        },
+        PackageManager::Nix => match op_str.as_str() {
+            "-i" | "-iA" => Ok(PackageOperation::Install),
+            "-e" => Ok(PackageOperation::Remove),
+            "-u" | "-uA" => Ok(PackageOperation::Upgrade),
+            "-qa" => Ok(PackageOperation::List),
+            _ if op_str.starts_with("search") => Ok(PackageOperation::Search),
+            _ => Err(PackageTranslationError::UnsupportedOperation(op_str)),
+        },
+        PackageManager::Generic => Err(PackageTranslationError::UnsupportedOperation(op_str)),
     }
 }
 
@@ -680,20 +714,6 @@ pub fn translate_package_command(
     // Parse the command
     let (detected_pm, operation, mut args) = parse_package_command(trimmed)?;
 
-    // Verify detected PM matches expected from_pm
-    if detected_pm != from_pm {
-        let mut result = PackageTranslationResult::new(
-            String::new(),
-            trimmed.to_string(),
-            from_pm,
-            to_pm,
-        );
-        result.warnings.push(format!(
-            "Command appears to be for {} but was specified as {}",
-            detected_pm, from_pm
-        ));
-    }
-
     // Get the target operation mapping
     let key = OperationKey { pm: to_pm, op: operation };
     let mapping = OPERATION_MAPPINGS.get(&key)
@@ -706,6 +726,14 @@ pub fn translate_package_command(
         from_pm,
         to_pm,
     );
+
+    // Verify detected PM matches expected from_pm
+    if detected_pm != from_pm {
+        result.warnings.push(format!(
+            "Command appears to be for {} but was specified as {}",
+            detected_pm, from_pm
+        ));
+    }
 
     result.requires_sudo = mapping.requires_sudo;
 
